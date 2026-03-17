@@ -7,7 +7,7 @@ This repository contains the infrastructure code for running a local AI cluster 
 ```mermaid
 graph TD
     subgraph Macbuntu Host ["🖥️ Macbuntu Host (Control Node)"]
-        subgraph k3d Cluster ["☸️ k3d Cluster (agent-sandbox)"]
+        subgraph k3s Cluster ["☸️ Native k3s Cluster"]
             subgraph ollama-system ["Namespace: ollama-system"]
                 OllamaServer["🧠 Local LLM Server (Ollama)"]
             end
@@ -41,10 +41,9 @@ graph TD
 
 The setup script and provisioners build the following environment:
 
-- **Kubernetes Cluster**: A lightweight `k3d` cluster named `agent-sandbox`.
+- **Kubernetes Cluster**: A native `k3s` installation on the Ubuntu host.
 - **Mobile Nodes**: Rooted Android devices bridged into the cluster via `Service` and `Endpoint` configurations (see `/mobile-nodes`).
 - **Namespaces**:
-
   - `ollama-system`: Dedicated namespace for the local LLM inference server.
   - `agent-execution`: A sandboxed namespace for running AI agents.
 - **Security**: A `default-deny-egress` network policy is applied to the `agent-execution` namespace to prevent agents from making unauthorized outbound connections.
@@ -52,14 +51,13 @@ The setup script and provisioners build the following environment:
 - **Models**: The environment is optimized for:
   - `qwen2.5:0.5b` (Auditor/Specialist role - very fast)
   - `mistral:7b` (Tech Lead role - much more stable for Aider)
-- **Agentic Editor**: Installs [Aider](https://aider.chat/) into a dedicated Python virtual environment and configures it to communicate with the local Ollama instance running inside the cluster.
+- **Agentic Editor**: Installs [Aider](https://aider.chat/) and [LLM CLI](https://llm.datasette.io/) into a dedicated Python virtual environment and configures them to communicate with the local Ollama instance running inside the cluster.
 
 ## Prerequisites
 
 The setup script requires:
-- `docker`
 - `kubectl`
-- `k3d`
+- `k3s`
 - **Python 3.9+**: Aider requires at least Python 3.9. On Ubuntu 20.04, it is recommended to use the `deadsnakes` PPA to install Python 3.9 and map `python3` to it via `update-alternatives`.
 
 ## Quick Start
@@ -80,6 +78,18 @@ The setup script requires:
    aider --model ollama_chat/mistral
    ```
 
+## Swarm Verification Script (`test-swarm.sh`)
+
+Use the `test-swarm.sh` script to verify the end-to-end functionality of your swarm using different tools and models.
+
+```bash
+# Test using LLM CLI with Qwen (fast)
+./test-swarm.sh llm qwen2.5:0.5b
+
+# Test using Aider with Mistral (stable)
+./test-swarm.sh aider mistral
+```
+
 ## Serverless Sandbox Executor (`swarm-exec.py`)
 
 For maximum security, this runtime includes a `swarm-exec.py` utility that allows agents to execute generated code inside a transient Kubernetes pod rather than on the host machine.
@@ -96,25 +106,20 @@ For maximum security, this runtime includes a `swarm-exec.py` utility that allow
 
 A "Red Team" exfiltration test was conducted to verify the isolation of the `agent-execution` namespace.
 
-- **Initial Finding**: Default `k3d` clusters using the standard Flannel CNI **do not enforce NetworkPolicies**, allowing pods to reach the public internet despite a `default-deny-egress` policy.
-- **The Fix**: The cluster is now explicitly created with the **k3s integrated network policy controller** enabled:
-  ```bash
-  k3d cluster create --k3s-arg "--disable-network-policy=false@server:*"
-  ```
+- **Initial Finding**: Default clusters often skip network policy enforcement.
+- **The Fix**: The cluster uses the **k3s integrated network policy controller** (enabled by default in native k3s).
 - **Verification**: Post-fix testing with `exfiltration-test.py` confirms that all outbound traffic (including DNS and HTTP) is now correctly blocked by the Kubernetes control plane.
 
 ## Gotchas & Caveats (Lessons Learned)
 
-- **NetworkPolicy Support**: By default, k3s/k3d may skip network policy enforcement. Always verify with `exfiltration-test.py` before trusting a "sandboxed" environment.
+- **NetworkPolicy Support**: Always verify with `exfiltration-test.py` before trusting a "sandboxed" environment.
 - **Python Versioning**: Ubuntu 20.04's default Python 3.8 is incompatible with modern Aider versions. Always ensure `python3 --version` returns 3.9+ before running `setup.sh`.
-- **Broken APT Repositories**: If `apt update` fails, check for outdated Kubernetes (`apt.kubernetes.io`) or Tor repositories in `/etc/apt/sources.list.d/` and disable or update them.
 - **Model Loops**: Smaller models (like `qwen2.5:0.5b`) may enter a repetition loop with Aider's complex system prompts. Use `mistral` (7B) for more reliable code generation tasks.
 - **Aider Model Naming**: For local Ollama instances, use the `ollama_chat/` prefix (e.g., `ollama_chat/mistral`) and set `OLLAMA_API_BASE="http://localhost:11434"` to ensure proper context window detection and API communication.
-- **k3d Port Mapping**: The cluster must be created with `-p "11434:11434@loadbalancer"` to expose the internal Ollama service to the host machine.
 
 ## Identity & Auditability
 
 Treat each device as a unique "employee" by setting device-specific Git identities:
-- **Macbuntu Box**: `git config --global user.name "Graham (K3d-Agent)"`
+- **Macbuntu Box**: `git config --global user.name "Graham (K3s-Agent)"`
 - **Moto Edge 23**: `git config --global user.name "Graham (MotoEdge23)"`
 - **PH-1 Auditor**: `git config --global user.name "Graham (Auditor-PH1)"`

@@ -17,39 +17,28 @@ echo "🚀 Starting Local AI Swarm Installation for Ubuntu..."
 # ==========================================
 echo "🔍 Checking dependencies..."
 
-if ! command -v docker &> /dev/null; then
-    echo "❌ Error: Docker is not installed."
-    echo "Run: curl -fsSL https://get.docker.com | sudo sh"
-    exit 1
-fi
-
 if ! command -v kubectl &> /dev/null; then
     echo "❌ Error: kubectl is not installed."
-    echo "Run: sudo snap install kubectl --classic"
+    echo "Run: curl -sfL https://get.k3s.io | sh -"
     exit 1
 fi
 
-if ! command -v k3d &> /dev/null; then
-    echo "❌ Error: k3d is not installed."
-    echo "Run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash"
+if ! command -v k3s &> /dev/null; then
+    echo "❌ Error: k3s is not installed."
+    echo "Run: curl -sfL https://get.k3s.io | sh -"
     exit 1
 fi
 
 echo "✅ All dependencies found."
 
 # ==========================================
-# 2. Cluster Bootstrap (with Native Port Mapping)
+# 2. Cluster Bootstrap (Native K3s)
 # ==========================================
-if k3d cluster list | grep -q "$CLUSTER_NAME"; then
-    echo "⚠️  Cluster '$CLUSTER_NAME' already exists. Skipping creation."
+if kubectl get nodes | grep -q "Ready"; then
+    echo "✅ Native K3s cluster is running."
 else
-    echo "📦 Spinning up K3d cluster: $CLUSTER_NAME (with NetworkPolicy support)..."
-    # Enable the k3s integrated network policy controller
-    k3d cluster create "$CLUSTER_NAME" \
-        -p "11434:11434@loadbalancer" \
-        --k3s-arg "--disable-network-policy=false@server:*" \
-        --servers 1 --agents 0 --wait
-    echo "✅ Cluster created."
+    echo "❌ Error: Native K3s cluster is not ready. Please start k3s."
+    exit 1
 fi
 
 # ==========================================
@@ -155,7 +144,7 @@ echo "📦 Installing/Updating Aider in virtual environment..."
 echo "=========================================="
 echo "🎉 INFRASTRUCTURE READY! 🎉"
 echo "=========================================="
-echo "To launch Aider connected to your private K3d cluster, run:"
+echo "To launch Aider connected to your private K3s cluster, run:"
 echo ""
 echo "  source $VENV_DIR/bin/activate"
 echo "  aider --model ollama/$MODEL_NAME"
