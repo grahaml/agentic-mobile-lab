@@ -4,10 +4,47 @@ This repository contains the infrastructure code for running a local AI cluster 
 
 ## Architecture
 
-The setup script provisions the following environment:
+```mermaid
+graph TD
+    subgraph Macbuntu Host ["🖥️ Macbuntu Host (Control Node)"]
+        subgraph k3d Cluster ["☸️ k3d Cluster (agent-sandbox)"]
+            subgraph ollama-system ["Namespace: ollama-system"]
+                OllamaServer["🧠 Local LLM Server (Ollama)"]
+            end
+            
+            subgraph agent-execution ["Namespace: agent-execution (Sandboxed)"]
+                AgentPod["🤖 Agent Pods (e.g., Aider, scripts)"]
+                MobileScoutSvc["🌉 Service: mobile-scout (Endpoint)"]
+                
+                AgentPod -- "SSH via Secret" --> MobileScoutSvc
+            end
+        end
+    end
+
+    subgraph Mobile Node ["📱 Mobile Node (The 'Graveyard' Fleet)"]
+        subgraph Termux Gateway ["🛡️ Termux Gateway (Android)"]
+            SSHD["🚪 sshd (Port 8022)"]
+        end
+        
+        subgraph Ubuntu Sandbox ["📦 Ubuntu Chroot Sandbox"]
+            Dispatcher["📋 enter_lab.sh (Command Dispatcher)"]
+            MobileLLM["🧠 Mobile LLM (llm CLI + Ollama)"]
+            
+            Dispatcher -- "Executes role (e.g., audit)" --> MobileLLM
+        end
+        
+        SSHD -- "su -c (Rooted Handoff)" --> Dispatcher
+    end
+
+    MobileScoutSvc -- "Physical LAN / Wi-Fi" --> SSHD
+```
+
+The setup script and provisioners build the following environment:
 
 - **Kubernetes Cluster**: A lightweight `k3d` cluster named `agent-sandbox`.
+- **Mobile Nodes**: Rooted Android devices bridged into the cluster via `Service` and `Endpoint` configurations (see `/mobile-nodes`).
 - **Namespaces**:
+
   - `ollama-system`: Dedicated namespace for the local LLM inference server.
   - `agent-execution`: A sandboxed namespace for running AI agents.
 - **Security**: A `default-deny-egress` network policy is applied to the `agent-execution` namespace to prevent agents from making unauthorized outbound connections.
