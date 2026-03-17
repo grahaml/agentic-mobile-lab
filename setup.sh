@@ -130,26 +130,34 @@ kubectl rollout status deployment/ollama -n $NAMESPACE_OLLAMA --timeout=120s
 # 5. Pulling the Local Model
 # ==========================================
 echo "📥 Pulling $MODEL_NAME directly into the cluster..."
-OLLAMA_POD=\$(kubectl get pods -n $NAMESPACE_OLLAMA -l app=ollama -o jsonpath='{.items[0].metadata.name}')
+OLLAMA_POD=$(kubectl get pods -n $NAMESPACE_OLLAMA -l app=ollama -o jsonpath='{.items[0].metadata.name}')
 kubectl exec -n $NAMESPACE_OLLAMA $OLLAMA_POD -- ollama run $MODEL_NAME "Initialization complete."
 
 # ==========================================
-# 6. Install Claude Code
+# 6. Install Aider (in Virtual Environment)
 # ==========================================
-if ! command -v claude &> /dev/null; then
-    echo "📦 Installing Claude Code CLI..."
-    # On Ubuntu, this will install it globally using standard paths
-    curl -fsSL https://claude.ai/install.sh | sh
-else
-    echo "✅ Claude Code CLI is already installed."
+VENV_DIR="$HOME/.venv-private-runtime"
+
+if [ -d "$VENV_DIR" ]; then
+    echo "🗑️ Removing old virtual environment..."
+    rm -rf "$VENV_DIR"
 fi
+
+echo "📦 Creating virtual environment for Aider at $VENV_DIR using python3..."
+python3 -m venv "$VENV_DIR"
+
+echo "📦 Installing/Updating Aider in virtual environment..."
+"$VENV_DIR/bin/pip" install -U pip aider-chat
 
 echo "=========================================="
 echo "🎉 INFRASTRUCTURE READY! 🎉"
 echo "=========================================="
-echo "To connect Claude Code to your private K3d cluster, run:"
+echo "To launch Aider connected to your private K3d cluster, run:"
 echo ""
-echo "  export ANTHROPIC_BASE_URL=\"http://localhost:11434\""
-echo "  export ANTHROPIC_AUTH_TOKEN=\"ollama\""
-echo "  export ANTHROPIC_API_KEY=\"\""
-echo "  claude --model $MODEL_NAME"
+echo "  source $VENV_DIR/bin/activate"
+echo "  aider --model ollama/$MODEL_NAME"
+echo ""
+echo "Or use the direct path:"
+echo "  $VENV_DIR/bin/aider --model ollama/$MODEL_NAME"
+echo ""
+echo "Note: If using a custom Ollama host, set OLLAMA_API_BASE=\"http://localhost:11434/v1\""
