@@ -43,8 +43,32 @@ The setup script requires:
    aider --model ollama_chat/mistral
    ```
 
+## Serverless Sandbox Executor (`swarm-exec.py`)
+
+For maximum security, this runtime includes a `swarm-exec.py` utility that allows agents to execute generated code inside a transient Kubernetes pod rather than on the host machine.
+
+- **Lifecycle**: Creates a fresh `python:3.12-slim` pod, executes the code, captures logs, and self-destructs.
+- **Robustness**: Uses Base64 encoding to pass code into the container, avoiding shell escaping and syntax issues.
+- **Example Usage**:
+  ```bash
+  source ~/.venv-private-runtime/bin/activate
+  python3 swarm-exec.py "import platform; print(platform.system())"
+  ```
+
+## Security Audit: Egress Control
+
+A "Red Team" exfiltration test was conducted to verify the isolation of the `agent-execution` namespace.
+
+- **Initial Finding**: Default `k3d` clusters using the standard Flannel CNI **do not enforce NetworkPolicies**, allowing pods to reach the public internet despite a `default-deny-egress` policy.
+- **The Fix**: The cluster is now explicitly created with the **k3s integrated network policy controller** enabled:
+  ```bash
+  k3d cluster create --k3s-arg "--disable-network-policy=false@server:*"
+  ```
+- **Verification**: Post-fix testing with `exfiltration-test.py` confirms that all outbound traffic (including DNS and HTTP) is now correctly blocked by the Kubernetes control plane.
+
 ## Gotchas & Caveats (Lessons Learned)
 
+- **NetworkPolicy Support**: By default, k3s/k3d may skip network policy enforcement. Always verify with `exfiltration-test.py` before trusting a "sandboxed" environment.
 - **Python Versioning**: Ubuntu 20.04's default Python 3.8 is incompatible with modern Aider versions. Always ensure `python3 --version` returns 3.9+ before running `setup.sh`.
 - **Broken APT Repositories**: If `apt update` fails, check for outdated Kubernetes (`apt.kubernetes.io`) or Tor repositories in `/etc/apt/sources.list.d/` and disable or update them.
 - **Model Loops**: Smaller models (like `qwen2.5:0.5b`) may enter a repetition loop with Aider's complex system prompts. Use `mistral` (7B) for more reliable code generation tasks.
