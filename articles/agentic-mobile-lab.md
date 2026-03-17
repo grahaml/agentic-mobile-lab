@@ -1,12 +1,11 @@
 Turning that collection of devices into a coordinated, autonomous development team is the ultimate 2026 power move for a Security Architect.
 
-Since you are aiming for this decentralized, multi-agent architecture with a strong focus on **PKI presentation** and **auditability**, I have structured this as a comprehensive, publishable technical article.
+This decentralized, multi-agent architecture with a strong focus on **PKI presentation** and **auditability** is structured as a comprehensive, publishable technical article.
 
 ---
 
 # The Agentic Mobile Lab: Resurrecting Old Android Hardware for Secure, Multi-Agent Dev Workflows
 
-**By Graham (15+ Year Security Architect)**
 *Date: March 15, 2026*
 
 The modern developer's graveyard is littered with "failed" hardware: older tablets locked down with ineffective kid-safe modes, mid-range phones retired due to slow background updates, and last-generation laptops. As local-first AI models mature in 2026, these devices represent an untapped reservoir of compute.
@@ -21,9 +20,9 @@ To treat these devices as separate "employees," we must establish clear boundari
 
 | Device | Hardware Context | Role | Identity (Git User) | Assigned LLM | Primary Focus |
 | --- | --- | --- | --- | --- | --- |
-| **Tablet** | Samsung Tab S5e (6GB RAM) | **Architect / Sr. Dev** | `Graham (TabS5e)` | `qwen2.5-coder:1.5b` | PKI design, Cert rotation logic, UI layout planning. |
-| **Server** | MacBook Pro 2018 (Macbuntu, 16GB) | **Tech Lead / heavy Lifter** | `Graham (K3d-Agent)` | `mistral:7b-instruct` | Test execution (k3d), code review, heavy debugging. |
-| **Phone A** | Google Pixel 5a (Retired 2023) | **Security Auditor** | `Graham (Auditor-P5a)` | `qwen2.5:0.5b` | Log analysis, static code analysis (SAST), PKI compliance check. |
+| **Tablet** | Samsung Tab S5e (6GB RAM) | **Architect / Sr. Dev** | `Agent (TabS5e)` | `qwen2.5-coder:1.5b` | PKI design, Cert rotation logic, UI layout planning. |
+| **Server** | MacBook Pro 2018 (Macbuntu, 16GB) | **Tech Lead / heavy Lifter** | `Agent (K3s-Host)` | `mistral:7b-instruct` | Test execution (k3s), code review, heavy debugging. |
+| **Phone A** | Google Pixel 5a (Retired 2023) | **Security Auditor** | `Agent (Auditor-P5a)` | `qwen2.5:0.5b` | Log analysis, static code analysis (SAST), PKI compliance check. |
 
 ---
 
@@ -37,6 +36,7 @@ The entire stack is local-first, privacy-by-default, and designed to minimize la
 | **Termux** | Terminal Emulator | A full Linux userland. This is the command center, the container, and the service manager for the entire local agent operation. |
 | **Ollama** | LLM Engine | Native arm64 Termux port. Runs quantized GGUF models with minimal overhead. Exposes a simple API for agent integration. |
 | **Aider** | Agentic Editor | The "eyes and hands" of the local agent. Reads files, understands code structures, runs tests, and commits changes directly. |
+| **k3s** | Orchestration | Lightweight Kubernetes for local clusters. Manages sandboxed agent execution pods with strict NetworkPolicy enforcement. |
 | **code-server** | Native IDE | Runs VS Code UI in a mobile browser. Provides the professional editing environment needed for validation. |
 | **Zellij** | Workspace Manager | Terminal multiplexer. Manages persistent sessions for Ollama and code-server, providing workspace organization on small screens. |
 | **discord.py** | Collaboration Layer | Framework used to give agents "a voice." They communicate via a dedicated Discord channel for clear command/control loops. |
@@ -101,7 +101,7 @@ pkg install tur-repo -y
 
 1. **Git Configuration:** Set a global unique identity.
 ```bash
-git config --global user.name "Graham (TabS5e)"
+git config --global user.name "Agent (TabS5e)"
 git config --global user.email "your-pki-lab@example.com"
 
 ```
@@ -110,7 +110,7 @@ git config --global user.email "your-pki-lab@example.com"
 2. **Generate SSH Key:** A device-specific key is generated for GitHub/GitLab access.
 ```bash
 pkg install openssh -y
-ssh-keygen -t ed25519 -C "graham-tabs5e" -f ~/.ssh/id_ed25519 -N ""
+ssh-keygen -t ed25519 -C "agent-tabs5e" -f ~/.ssh/id_ed25519 -N ""
 
 ```
 
@@ -190,7 +190,7 @@ This loop illustrates how you use Aider as an "on-device architect" to rapidly p
 > ` [Zellij Pane: Aider CLI]` --`(Generates Code & Commit Message)`
 > `      |`
 > `      v (Shell Command)`
-> `[Git / Local Filesystem]` --`(Modifies pki_rotation.py, Commits with "Graham (TabS5e)" identity)`
+> `[Git / Local Filesystem]` --`(Modifies pki_rotation.py, Commits with "Agent (TabS5e)" identity)`
 
 ### Diagram 2: The Collaboration Loop (Discord/Multi-Agent)
 
@@ -203,7 +203,7 @@ This diagram shows how you facilitate a distinct boundaries workflow. The Tablet
 > `      |`
 > `      +---> [@Tablet bot (Qwen)] ---> [Generates pki_rotation.py]` ---> `[Pops into code-server/commits]` ---> `[Posts code link in Discord]`
 > `      |`
-> `      +---> [@MacBook bot (Mistral)] ---> [Waits for completion]` ---> `[Checks out code]` ---> `[Runs pki_rotation.py via k3d]` ---> `[Post review in Discord]`
+> `      +---> [@MacBook bot (Mistral)] ---> [Waits for completion]` ---> `[Checks out code]` ---> `[Runs pki_rotation.py via k3s]` ---> `[Post review in Discord]`
 
 ---
 
@@ -223,7 +223,7 @@ The minimum hardware requirement to run Ollama reliably is an `arm64-v8a` proces
 
 ### 2. Testing Your Fleet
 
-The "Graham Method" for fleet assessment involves running a standardized inference speed benchmark to gauge compatibility.
+The standard method for fleet assessment involves running a standardized inference speed benchmark to gauge compatibility.
 
 **Save as `ollama-test.sh` in Termux on any phone:**
 

@@ -13,12 +13,12 @@ The goal was simple but ambitious: create a "black box" where an AI agent like A
 
 ## 2. Architecture: The Multi-Layered Fortress
 
-The runtime is built on a tiered architecture using **k3d** (a lightweight Kubernetes distribution) running on a Linux host.
+The runtime is built on a tiered architecture using **k3s** (a lightweight Kubernetes distribution) running natively on a Linux host.
 
 ```mermaid
 graph TD
     subgraph Host ["🖥️ Linux Host"]
-        subgraph k3d ["☸️ k3d Cluster"]
+        subgraph k3s ["☸️ Native k3s Cluster"]
             subgraph NS_Ollama ["Namespace: ollama-system"]
                 Ollama["🧠 Ollama Server"]
             end
@@ -70,14 +70,14 @@ To scale horizontally without buying new hardware, we integrated old, rooted And
 Building this wasn't without its hurdles. Here are the key technical challenges we overcame:
 
 ### The NetworkPolicy Illusion
-The most critical discovery was that standard `k3d` (using the Flannel CNI) **does not enforce NetworkPolicies by default**. During initial testing, we found that pods in the "sandboxed" namespace could still reach the public internet.
+The most critical discovery was that standard clusters often skip network policy enforcement. During initial testing, we found that pods in the "sandboxed" namespace could still reach the public internet if not configured correctly.
 
 ```mermaid
 graph LR
     Pod["🤖 Agent Pod"]
     NP["🛡️ NetworkPolicy"]
-    CNI["⚙️ Flannel (Standard)"]
-    CNI_Fix["⚙️ K3s Controller (Fix)"]
+    CNI["⚙️ Standard CNI"]
+    CNI_Fix["⚙️ K3s Controller (Native)"]
     Internet["🌐 Internet"]
 
     Pod --> NP
@@ -85,13 +85,10 @@ graph LR
     NP --> CNI_Fix -->|BLOCK| Internet
 ```
 
-*   **The Fix:** We had to explicitly enable the k3s integrated network policy controller during cluster creation:
-    ```bash
-    k3d cluster create --k3s-arg "--disable-network-policy=false@server:*"
-    ```
+*   **The Fix:** By using a native `k3s` installation, the integrated network policy controller is enabled by default, ensuring immediate enforcement of security boundaries.
 
 ### Verified Isolation (The Red Team Test)
-To ensure the fix worked, we developed `exfiltration-test.py`. This script attempts to reach common external IPs and DNS servers. Only after this script fails to "phone home" do we consider the runtime ready for agentic work.
+To ensure the isolation worked, we developed `exfiltration-test.py`. This script attempts to reach common external IPs and DNS servers. Only after this script fails to "phone home" do we consider the runtime ready for agentic work.
 
 ### The Python Version Trap
 Ubuntu 20.04 (our primary testbed) ships with Python 3.8. However, modern agentic tools like Aider require Python 3.9+. The setup script was updated to handle `update-alternatives` and ensure a compatible virtual environment is created automatically.
