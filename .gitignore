@@ -1,0 +1,42 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+*.bak
+
+# Temporary files
+tmp/
+temp/
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build artifacts and dependencies
+node_modules/
+dist/
+build/
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Kubernetes/Docker local configs
+.kube/
+*.pem
+*.key
+*.crt

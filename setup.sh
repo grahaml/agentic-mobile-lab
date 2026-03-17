@@ -1,0 +1,155 @@
+#!/bin/bash
+
+set -e # Exit immediately if a command exits with a non-zero status
+
+# ==========================================
+# Configuration
+# ==========================================
+CLUSTER_NAME="agent-sandbox"
+NAMESPACE_AGENTS="agent-execution"
+NAMESPACE_OLLAMA="ollama-system"
+MODEL_NAME="qwen2.5:0.5b" # CPU-friendly model
+
+echo "🚀 Starting Local AI Swarm Installation for Ubuntu..."
+
+# ==========================================
+# 1. Pre-flight Checks (Linux Native)
+# ==========================================
+echo "🔍 Checking dependencies..."
+
+if ! command -v docker &> /dev/null; then
+    echo "❌ Error: Docker is not installed."
+    echo "Run: curl -fsSL https://get.docker.com | sudo sh"
+    exit 1
+fi
+
+if ! command -v kubectl &> /dev/null; then
+    echo "❌ Error: kubectl is not installed."
+    echo "Run: sudo snap install kubectl --classic"
+    exit 1
+fi
+
+if ! command -v k3d &> /dev/null; then
+    echo "❌ Error: k3d is not installed."
+    echo "Run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash"
+    exit 1
+fi
+
+echo "✅ All dependencies found."
+
+# ==========================================
+# 2. Cluster Bootstrap (with Native Port Mapping)
+# ==========================================
+if k3d cluster list | grep -q "$CLUSTER_NAME"; then
+    echo "⚠️  Cluster '$CLUSTER_NAME' already exists. Skipping creation."
+else
+    echo "📦 Spinning up K3d cluster: $CLUSTER_NAME..."
+    # The -p flag binds the host's localhost:11434 directly to the cluster's LoadBalancer
+    k3d cluster create "$CLUSTER_NAME" -p "11434:11434@loadbalancer" --servers 1 --agents 0 --wait
+    echo "✅ Cluster created."
+fi
+
+# ==========================================
+# 3. Secure Namespaces & Network Policies
+# ==========================================
+echo "🛡️  Configuring namespaces and sandboxed network policies..."
+
+kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $NAMESPACE_OLLAMA
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: $NAMESPACE_AGENTS
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: $NAMESPACE_AGENTS
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+EOF
+echo "✅ Sandboxed namespaces created."
+
+# ==========================================
+# 4. Deploy CPU-Optimized Ollama
+# ==========================================
+echo "🧠 Deploying Ollama (Native Linux CPU mode)..."
+
+kubectl apply -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: $NAMESPACE_OLLAMA
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      containers:
+      - name: ollama
+        image: ollama/ollama:latest
+        ports:
+        - containerPort: 11434
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama-service
+  namespace: $NAMESPACE_OLLAMA
+spec:
+  type: LoadBalancer 
+  selector:
+    app: ollama
+  ports:
+    - protocol: TCP
+      port: 11434
+      targetPort: 11434
+EOF
+
+echo "⏳ Waiting for Ollama pod to be ready (this might take a minute)..."
+kubectl rollout status deployment/ollama -n $NAMESPACE_OLLAMA --timeout=120s
+
+# ==========================================
+# 5. Pulling the Local Model
+# ==========================================
+echo "📥 Pulling $MODEL_NAME directly into the cluster..."
+OLLAMA_POD=\$(kubectl get pods -n $NAMESPACE_OLLAMA -l app=ollama -o jsonpath='{.items[0].metadata.name}')
+kubectl exec -n $NAMESPACE_OLLAMA $OLLAMA_POD -- ollama run $MODEL_NAME "Initialization complete."
+
+# ==========================================
+# 6. Install Claude Code
+# ==========================================
+if ! command -v claude &> /dev/null; then
+    echo "📦 Installing Claude Code CLI..."
+    # On Ubuntu, this will install it globally using standard paths
+    curl -fsSL https://claude.ai/install.sh | sh
+else
+    echo "✅ Claude Code CLI is already installed."
+fi
+
+echo "=========================================="
+echo "🎉 INFRASTRUCTURE READY! 🎉"
+echo "=========================================="
+echo "To connect Claude Code to your private K3d cluster, run:"
+echo ""
+echo "  export ANTHROPIC_BASE_URL=\"http://localhost:11434\""
+echo "  export ANTHROPIC_AUTH_TOKEN=\"ollama\""
+echo "  export ANTHROPIC_API_KEY=\"\""
+echo "  claude --model $MODEL_NAME"
