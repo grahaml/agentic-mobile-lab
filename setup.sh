@@ -43,9 +43,12 @@ echo "✅ All dependencies found."
 if k3d cluster list | grep -q "$CLUSTER_NAME"; then
     echo "⚠️  Cluster '$CLUSTER_NAME' already exists. Skipping creation."
 else
-    echo "📦 Spinning up K3d cluster: $CLUSTER_NAME..."
-    # The -p flag binds the host's localhost:11434 directly to the cluster's LoadBalancer
-    k3d cluster create "$CLUSTER_NAME" -p "11434:11434@loadbalancer" --servers 1 --agents 0 --wait
+    echo "📦 Spinning up K3d cluster: $CLUSTER_NAME (with NetworkPolicy support)..."
+    # Enable the k3s integrated network policy controller
+    k3d cluster create "$CLUSTER_NAME" \
+        -p "11434:11434@loadbalancer" \
+        --k3s-arg "--disable-network-policy=false@server:*" \
+        --servers 1 --agents 0 --wait
     echo "✅ Cluster created."
 fi
 
