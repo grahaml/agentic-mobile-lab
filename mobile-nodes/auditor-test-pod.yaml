@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: auditor-test
+  namespace: agent-execution
+spec:
+  hostNetwork: true
+  containers:
+  - name: auditor-test
+    image: alpine
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        apk add --no-cache openssh-client && \
+        # Copy to a place where we can truly change permissions
+        mkdir -p /tmp/ssh && \
+        cp /etc/ssh-keys/id_mobile_mobile-scout /tmp/ssh/id_mobile_mobile-scout && \
+        chmod 600 /tmp/ssh/id_mobile_mobile-scout && \
+        TARGET_IP="192.168.4.53"
+        TERMUX_USER="u0_a386"
+        echo "Attempting to reach mobile-scout at $TARGET_IP via SSH as $TERMUX_USER..."
+        echo "import os; print(os.getuid())" | \
+        ssh -o StrictHostKeyChecking=no \
+            -o IdentitiesOnly=yes \
+            -o ConnectTimeout=10 \
+            -i /tmp/ssh/id_mobile_mobile-scout \
+            -p 8022 $TERMUX_USER@$TARGET_IP "su -c 'sh /data/data/com.termux/files/home/enter_lab.sh audit'"
+    volumeMounts:
+    - name: ssh-key-volume
+      mountPath: /etc/ssh-keys
+      readOnly: true
+  volumes:
+  - name: ssh-key-volume
+    secret:
+      secretName: mobile-scout-ssh-key
+  restartPolicy: Never
