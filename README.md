@@ -90,6 +90,15 @@ Use the `test-swarm.sh` script to verify the end-to-end functionality of your sw
 ./test-swarm.sh aider mistral
 ```
 
+## Mobile Bridge Test (`test-mobile-bridge.py`)
+
+To verify the connection to your mobile nodes from within a sandboxed pod, use the `test-mobile-bridge.py` script. This script uses Kubernetes environment variables to dynamically discover the mobile service and verify the inference path.
+
+```bash
+source ~/.venv-private-runtime/bin/activate
+python3 swarm-exec.py test-mobile-bridge.py
+```
+
 ## Serverless Sandbox Executor (`swarm-exec.py`)
 
 For maximum security, this runtime includes a `swarm-exec.py` utility that allows agents to execute generated code inside a transient Kubernetes pod rather than on the host machine.
@@ -108,6 +117,7 @@ A "Red Team" exfiltration test was conducted to verify the isolation of the `age
 
 - **Initial Finding**: Default clusters often skip network policy enforcement.
 - **The Fix**: The cluster uses the **k3s integrated network policy controller** (enabled by default in native k3s).
+- **Refinement**: A custom `netpol-allow-internal.yaml` is provided to allow internal cluster DNS and mobile node traffic while maintaining a strict "deny-all" for the public internet.
 - **Verification**: Post-fix testing with `exfiltration-test.py` confirms that all outbound traffic (including DNS and HTTP) is now correctly blocked by the Kubernetes control plane.
 
 ## Gotchas & Caveats (Lessons Learned)

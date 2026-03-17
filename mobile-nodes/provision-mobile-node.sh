@@ -69,14 +69,14 @@ fi
 
 # 6. Bootstrap Ollama & Models (Idempotent model check)
 echo "📥 Checking model $MODEL_NAME..."
-# Start ollama if not running
-adb shell "su -c 'chroot $UBUNTU_ROOT /bin/su - agent-lab -c \"pgrep ollama >/dev/null || (ollama serve >/dev/null 2>&1 & sleep 5)\"'"
+# Start ollama if not running (binding to all interfaces for cluster access)
+adb shell "su -c 'chroot $UBUNTU_ROOT /bin/su - agent-lab -c \"pgrep ollama >/dev/null || (OLLAMA_HOST=0.0.0.0 /usr/local/bin/ollama serve > /dev/null 2>&1 & sleep 5)\"'"
 # Check if model is already pulled
-if adb shell "su -c 'chroot $UBUNTU_ROOT /bin/su - agent-lab -c \"ollama list\"' | grep -q \"$MODEL_NAME\""; then
+if adb shell "su -c 'chroot $UBUNTU_ROOT /bin/su - agent-lab -c \"/usr/local/bin/ollama list\"' | grep -q \"$MODEL_NAME\""; then
     echo "✅ Model $MODEL_NAME already pulled."
 else
     echo "📥 Pulling model $MODEL_NAME..."
-    adb shell "su -c 'chroot $UBUNTU_ROOT /bin/su - agent-lab -c \"ollama pull $MODEL_NAME\"'"
+    adb shell "su -c 'chroot $UBUNTU_ROOT /bin/su - agent-lab -c \"/usr/local/bin/ollama pull $MODEL_NAME\"'"
 fi
 
 # 7. Deploy Hardened enter-lab.sh
