@@ -19,9 +19,24 @@ if ! adb devices | grep -q "device$"; then
     exit 1
 fi
 
-# 1b. Android 15+ Fix: Disable Phantom Process Killer
-echo "👻 Disabling Phantom Process Killer (Android 15+ compatibility)..."
-adb shell "/system/bin/device_config put activity_manager max_phantom_processes 2147483647" || echo "⚠️ Warning: Could not disable phantom process killer."
+# --- Power Management & Stability (Cascading Hacks) ---
+echo "👻 Hardening background stability and Wi-Fi (Cascading)..."
+# 1. Phantom Process Killer (Android 12+)
+adb shell "/system/bin/device_config put activity_manager max_phantom_processes 2147483647" >/dev/null 2>&1 || true
+adb shell "/system/bin/device_config set_sync_disabled_for_tests persistent" >/dev/null 2>&1 || true
+adb shell settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
+
+# 2. Wi-Fi Sleep Policy (Keep alive during sleep)
+adb shell settings put global wifi_sleep_policy 2 >/dev/null 2>&1 || adb shell settings put system wifi_sleep_policy 2 >/dev/null 2>&1 || true
+adb shell settings put global wifi_idle_ms 86400000 >/dev/null 2>&1 || true
+
+# 3. Doze Mode Exemption for Termux
+adb shell dumpsys deviceidle whitelist +com.termux >/dev/null 2>&1 || true
+
+# 4. Screen Timeout Override (Optional/Fallback)
+adb shell settings put system screen_off_timeout 2147483647 >/dev/null 2>&1 || true
+
+echo "💡 NOTE: Please manually verify 'Unrestricted' battery usage for Termux in Android Settings if disconnects persist."
 
 # Get functional role (e.g., matrix-host, scout) from argument
 SERVICE_ROLE=${1:-"scout"}
@@ -60,6 +75,42 @@ else
 fi
 # Always ensure sshd is running
 adb shell "su -c 'pgrep sshd >/dev/null || $TERMUX_BIN/sshd'"
+
+# 3b. Configure Termux Dashboard & Wake Lock
+echo "🪟 Configuring Termux Dashboard & Wake Lock..."
+adb shell "su $TERMUX_USER -g 3003 -c 'PATH=$TERMUX_BIN:\$PATH $TERMUX_BIN/pkg install tmux htop -y > /dev/null 2>&1'"
+adb shell "su $TERMUX_USER -g 3003 -c 'PATH=$TERMUX_BIN:\$PATH $TERMUX_BIN/termux-wake-lock || true'"
+
+# Generate dashboard script on host and push it
+cat << 'EOF' > start-dashboard.sh
+#!/data/data/com.termux/files/usr/bin/bash
+export PATH="/data/data/com.termux/files/usr/bin:$PATH"
+tmux new-session -d -s agent-dashboard
+
+# Split vertically
+tmux split-window -v -p 30 -t agent-dashboard:0
+# Split bottom pane horizontally
+tmux split-window -h -p 50 -t agent-dashboard:0.1
+
+# Top pane (0): htop
+tmux send-keys -t agent-dashboard:0.0 "htop" C-m
+
+# Bottom-left pane (1): Chroot processes or Ollama logs
+tmux send-keys -t agent-dashboard:0.1 "su -c 'chroot /data/local/ubuntu /bin/su - agent-lab -c \"top\"'" C-m
+
+# Bottom-right pane (2): Readiness
+tmux send-keys -t agent-dashboard:0.2 "echo 'Rooted Dashboard Ready!'; ifconfig | grep -E 'inet .*wlan'" C-m
+
+# Attach to session
+tmux attach-session -t agent-dashboard
+EOF
+
+adb push start-dashboard.sh /data/local/tmp/start-dashboard.sh
+rm start-dashboard.sh
+adb shell "su -c 'mv /data/local/tmp/start-dashboard.sh $TERMUX_HOME/start-dashboard.sh && chown $TERMUX_USER:$TERMUX_USER $TERMUX_HOME/start-dashboard.sh && chmod +x $TERMUX_HOME/start-dashboard.sh'"
+
+# Auto-launch on open
+adb shell "su -c 'grep -q start-dashboard.sh $TERMUX_HOME/.bashrc 2>/dev/null || echo -e \"\n# Auto-start dashboard\nif [ -z \\\"\$TMUX\\\" ]; then\n    ~/start-dashboard.sh\nfi\" >> $TERMUX_HOME/.bashrc'"
 
 # 4. Prepare Ubuntu Chroot Environment (Idempotent Ollama binary check)
 echo "🧪 Checking Ubuntu Chroot dependencies..."

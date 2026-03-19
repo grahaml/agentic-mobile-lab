@@ -25,7 +25,11 @@ echo "🚀 Initializing Mobile Agent Lab (Venv Scout Edition)..."
 echo "📦 Updating Termux and installing build tools..."
 pkg update -y && pkg upgrade -y
 # Install all required native tools
-pkg install ollama python git openssh gh rust binutils build-essential clang -y
+pkg install ollama python git openssh gh rust binutils build-essential clang tmux htop -y
+
+# Prevent CPU sleep
+echo "🛡️  Acquiring Termux CPU Wake Lock..."
+termux-wake-lock || true
 
 # 2. Setup Virtual Environment (The "Safe" Way)
 echo "🐍 Creating virtual environment at $VENV_PATH..."
@@ -54,10 +58,40 @@ sleep 5
 # Check if llm can see the models
 "$VENV_PATH/bin/llm" models list | grep "ollama" || echo "⚠️ Ollama models not detected yet."
 
-# 5. Zellij Layout Configuration (Skipped due to permission bug)
-# echo "🪟 Configuring Zellij layout..."
-# mkdir -p "$ZELLIJ_LAYOUT_DIR"
-# ... (rest of layout config)
+# 5. Dashboard Configuration
+echo "🪟 Configuring Tmux dashboard..."
+cat << 'EOF' > "$HOME/start-dashboard.sh"
+#!/bin/bash
+# Start a new detached tmux session
+tmux new-session -d -s agent-dashboard
+
+# Split vertically
+tmux split-window -v -p 30 -t agent-dashboard:0
+# Split bottom pane horizontally
+tmux split-window -h -p 50 -t agent-dashboard:0.1
+
+# Top pane (0): htop
+tmux send-keys -t agent-dashboard:0.0 "htop" C-m
+
+# Bottom-left pane (1): Ollama server
+tmux send-keys -t agent-dashboard:0.1 "export OLLAMA_HOST=0.0.0.0; ollama serve" C-m
+
+# Bottom-right pane (2): Venv and readiness
+tmux send-keys -t agent-dashboard:0.2 "source ~/.venv-llm/bin/activate; echo 'Dashboard Ready!'; ifconfig | grep -E 'inet .*wlan'" C-m
+
+# Attach to session
+tmux attach-session -t agent-dashboard
+EOF
+chmod +x "$HOME/start-dashboard.sh"
+
+# Auto-launch on open
+if ! grep -q "start-dashboard.sh" "$HOME/.bashrc" 2>/dev/null; then
+    echo "" >> "$HOME/.bashrc"
+    echo "# Auto-start dashboard if not in tmux" >> "$HOME/.bashrc"
+    echo 'if [ -z "$TMUX" ]; then' >> "$HOME/.bashrc"
+    echo '    ~/start-dashboard.sh' >> "$HOME/.bashrc"
+    echo 'fi' >> "$HOME/.bashrc"
+fi
 
 # 6. Bootstrapping the Local Model
 echo "📥 Pulling $MODEL_NAME..."

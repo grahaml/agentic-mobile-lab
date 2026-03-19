@@ -40,10 +40,24 @@ else
     echo "✅ Termux already installed."
 fi
 
-# Android 15+ Fix: Disable Phantom Process Killer
-# ...
-echo "👻 Hardening Android 15 background stability..."
-adb shell "/system/bin/device_config put activity_manager max_phantom_processes 2147483647"
+# --- Power Management & Stability (Cascading Hacks) ---
+echo "👻 Hardening background stability and Wi-Fi (Cascading)..."
+# 1. Phantom Process Killer (Android 12+)
+adb shell "/system/bin/device_config put activity_manager max_phantom_processes 2147483647" >/dev/null 2>&1 || true
+adb shell "/system/bin/device_config set_sync_disabled_for_tests persistent" >/dev/null 2>&1 || true
+adb shell settings put global settings_enable_monitor_phantom_procs false >/dev/null 2>&1 || true
+
+# 2. Wi-Fi Sleep Policy (Keep alive during sleep)
+adb shell settings put global wifi_sleep_policy 2 >/dev/null 2>&1 || adb shell settings put system wifi_sleep_policy 2 >/dev/null 2>&1 || true
+adb shell settings put global wifi_idle_ms 86400000 >/dev/null 2>&1 || true
+
+# 3. Doze Mode Exemption for Termux
+adb shell dumpsys deviceidle whitelist +com.termux >/dev/null 2>&1 || true
+
+# 4. Screen Timeout Override (Optional/Fallback)
+adb shell settings put system screen_off_timeout 2147483647 >/dev/null 2>&1 || true
+
+echo "💡 NOTE: Please manually verify 'Unrestricted' battery usage for Termux in Android Settings if disconnects persist."
 
 # Siphon hardware ID with strict sanitization or use provided override
 DEVICE_ID=${2:-$(adb shell getprop ro.product.model | tr -d '\r' | tr -cd '[:alnum:]_-' | tr '[:upper:]' '[:lower:]')}
