@@ -117,7 +117,7 @@ A "Red Team" exfiltration test was conducted to verify the isolation of the `age
 
 - **Initial Finding**: Default clusters often skip network policy enforcement.
 - **The Fix**: The cluster uses the **k3s integrated network policy controller** (enabled by default in native k3s).
-- **Refinement**: A custom `netpol-allow-internal.yaml` is provided to allow internal cluster DNS and mobile node traffic while maintaining a strict "deny-all" for the public internet.
+- **Refinement**: A custom `manifests/netpol-allow-internal.yaml` is provided to allow internal cluster DNS and mobile node traffic while maintaining a strict "deny-all" for the public internet.
 - **Verification**: Post-fix testing with `exfiltration-test.py` confirms that all outbound traffic (including DNS and HTTP) is now correctly blocked by the Kubernetes control plane.
 
 ## Gotchas & Caveats (Lessons Learned)
