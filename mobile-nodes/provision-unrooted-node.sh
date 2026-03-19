@@ -45,8 +45,8 @@ fi
 echo "👻 Hardening Android 15 background stability..."
 adb shell "/system/bin/device_config put activity_manager max_phantom_processes 2147483647"
 
-# Siphon hardware ID with strict sanitization
-DEVICE_ID=$(adb shell getprop ro.product.model | tr -d '\r' | tr -cd '[:alnum:]_-' | tr '[:upper:]' '[:lower:]')
+# Siphon hardware ID with strict sanitization or use provided override
+DEVICE_ID=${2:-$(adb shell getprop ro.product.model | tr -d '\r' | tr -cd '[:alnum:]_-' | tr '[:upper:]' '[:lower:]')}
 API_LEVEL=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
 PERSONA_NAME="${SERVICE_ROLE}-${DEVICE_ID}"
 

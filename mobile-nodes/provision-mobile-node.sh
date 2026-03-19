@@ -12,7 +12,11 @@ set -e
 UBUNTU_ROOT="/data/local/ubuntu"
 TERMUX_HOME="/data/data/com.termux/files/home"
 MODEL_NAME="qwen2.5-coder:1.5b"
-SERVICE_NAME="mobile-scout" # The "Persona" name for this node
+
+# Identity
+SERVICE_ROLE=${1:-"scout"}
+DEVICE_ID=${2:-"unknown"}
+SERVICE_NAME="${SERVICE_ROLE}-${DEVICE_ID}"
 
 echo "🛰️  Starting Mobile Agent Provisioning ($SERVICE_NAME)..."
 
@@ -113,7 +117,7 @@ ssh-keyscan -p 8022 "$PHONE_IP" >> ~/.ssh/known_hosts 2>/dev/null
 
 # 10. Register in Kubernetes Cluster
 echo "🔗 Bridging phone into k3d cluster..."
-"$DIR/bridge-phone.sh" "$PHONE_IP"
+"$DIR/bridge-phone.sh" "$PHONE_IP" "$SERVICE_ROLE" "$DEVICE_ID"
 
 # 11. Final Verification (Using the NEW specific key and correct Termux user)
 echo "✅ Verifying passwordless SSH handoff with NEW key..."

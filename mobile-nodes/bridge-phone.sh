@@ -14,6 +14,8 @@ NAMESPACE="agent-execution"
 SERVICE_ROLE=${2:-"scout"}
 DEVICE_ID=${3:-"unknown"}
 PERSONA_NAME="${SERVICE_ROLE}-${DEVICE_ID}"
+MANIFEST_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../manifests"
+MANIFEST_PATH="$MANIFEST_DIR/mobile-bridge-$PERSONA_NAME.yaml"
 
 # 1. Validation
 if [ -z "$1" ]; then
@@ -27,7 +29,8 @@ PHONE_IP=$1
 echo "🔗 Bridging Mobile Agent ($PERSONA_NAME) at $PHONE_IP to cluster..."
 
 # 2. Create the Kubernetes manifest
-cat <<EOF > mobile-bridge.yaml
+mkdir -p "$MANIFEST_DIR"
+cat <<EOF > "$MANIFEST_PATH"
 apiVersion: v1
 kind: Service
 metadata:
@@ -71,7 +74,7 @@ if ! kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
 fi
 
 echo "🛰️  Applying Service and Endpoints for $PERSONA_NAME..."
-kubectl apply -f mobile-bridge.yaml
+kubectl apply -f "$MANIFEST_PATH"
 
 echo "✅ Bridge Created!"
 echo "------------------------------------------"

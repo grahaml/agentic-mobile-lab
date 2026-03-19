@@ -23,11 +23,11 @@ fi
 echo "👻 Disabling Phantom Process Killer (Android 15+ compatibility)..."
 adb shell "/system/bin/device_config put activity_manager max_phantom_processes 2147483647" || echo "⚠️ Warning: Could not disable phantom process killer."
 
-# Siphon hardware ID (e.g., ph-1, s10e)
-DEVICE_ID=$(adb shell getprop ro.product.model | tr -d '\r' | tr -cd '[:alnum:]_-' | tr '[:upper:]' '[:lower:]')
-API_LEVEL=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
 # Get functional role (e.g., matrix-host, scout) from argument
 SERVICE_ROLE=${1:-"scout"}
+# Siphon hardware ID (e.g., ph-1, s10e) or use provided override
+DEVICE_ID=${2:-$(adb shell getprop ro.product.model | tr -d '\r' | tr -cd '[:alnum:]_-' | tr '[:upper:]' '[:lower:]')}
+API_LEVEL=$(adb shell getprop ro.build.version.sdk | tr -d '\r')
 
 # The Persona Name is the unique identifier for this specific hardware-role pair
 PERSONA_NAME="${SERVICE_ROLE}-${DEVICE_ID}"
