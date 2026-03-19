@@ -11,28 +11,31 @@ set -e
 
 # Configuration
 NAMESPACE="agent-execution"
-SERVICE_NAME="mobile-scout"
+SERVICE_ROLE=${2:-"scout"}
+DEVICE_ID=${3:-"unknown"}
+PERSONA_NAME="${SERVICE_ROLE}-${DEVICE_ID}"
 
 # 1. Validation
 if [ -z "$1" ]; then
-    echo "❌ Usage: ./bridge-phone.sh <PHONE_IP>"
-    echo "Example: ./bridge-phone.sh 192.168.4.50"
+    echo "❌ Usage: ./bridge-phone.sh <PHONE_IP> [SERVICE_ROLE] [DEVICE_ID]"
+    echo "Example: ./bridge-phone.sh 192.168.4.50 matrix-host ph-1"
     exit 1
 fi
 
 PHONE_IP=$1
 
-echo "🔗 Bridging Mobile Agent at $PHONE_IP to cluster..."
+echo "🔗 Bridging Mobile Agent ($PERSONA_NAME) at $PHONE_IP to cluster..."
 
 # 2. Create the Kubernetes manifest
 cat <<EOF > mobile-bridge.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: $SERVICE_NAME
+  name: $PERSONA_NAME
   namespace: $NAMESPACE
   labels:
-    agent-role: scout
+    agent-role: $SERVICE_ROLE
+    device-id: $DEVICE_ID
     device-type: mobile
 spec:
   ports:
@@ -42,12 +45,11 @@ spec:
     - name: ollama
       port: 11434
       targetPort: 11434
-  # Removed ClusterIP: None
 ---
 apiVersion: v1
 kind: Endpoints
 metadata:
-  name: $SERVICE_NAME
+  name: $PERSONA_NAME
   namespace: $NAMESPACE
 subsets:
   - addresses:
@@ -60,22 +62,21 @@ subsets:
 EOF
 
 # 3. Apply to Cluster
-# Idempotently create the secret if it doesn't exist
-SECRET_NAME="${SERVICE_NAME}-ssh-key"
+SECRET_NAME="${PERSONA_NAME}-ssh-key"
 if ! kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
-    echo "🔑 Creating Kubernetes Secret for $SERVICE_NAME..."
-    # We assume the key exists from the provisioner step
+    echo "🔑 Creating Kubernetes Secret for $PERSONA_NAME..."
     kubectl create secret generic "$SECRET_NAME" \
-        --from-file="id_mobile_$SERVICE_NAME=$HOME/.ssh/id_mobile_$SERVICE_NAME" \
+        --from-file="id_mobile_$PERSONA_NAME=$HOME/.ssh/id_mobile_$PERSONA_NAME" \
         -n "$NAMESPACE"
 fi
 
-echo "🛰️  Applying Service and Endpoints for $SERVICE_NAME..."
+echo "🛰️  Applying Service and Endpoints for $PERSONA_NAME..."
 kubectl apply -f mobile-bridge.yaml
 
 echo "✅ Bridge Created!"
 echo "------------------------------------------"
-echo "DNS Address: $SERVICE_NAME.$NAMESPACE.svc.cluster.local"
+echo "DNS Address: $PERSONA_NAME.$NAMESPACE.svc.cluster.local"
+echo "Labels: agent-role=$SERVICE_ROLE, device-id=$DEVICE_ID"
 echo "SSH Port: 8022"
 echo "Ollama Port: 11434"
 echo "------------------------------------------"

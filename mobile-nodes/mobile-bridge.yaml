@@ -1,10 +1,11 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: mobile-scout
+  name: scout-motorolaedge2023
   namespace: agent-execution
   labels:
     agent-role: scout
+    device-id: motorolaedge2023
     device-type: mobile
 spec:
   ports:
@@ -14,12 +15,11 @@ spec:
     - name: ollama
       port: 11434
       targetPort: 11434
-  # Removed ClusterIP: None
 ---
 apiVersion: v1
 kind: Endpoints
 metadata:
-  name: mobile-scout
+  name: scout-motorolaedge2023
   namespace: agent-execution
 subsets:
   - addresses:
