@@ -2,24 +2,28 @@ import urllib.request
 import json
 import socket
 import os
+import sys
 
-print('🔍 Starting Cluster-to-Mobile Swarm Test (Dynamic Discovery)...')
+# Get service name from argument or default to mobile-scout
+service_name = sys.argv[1] if len(sys.argv) > 1 else 'mobile-scout'
+env_prefix = service_name.upper().replace('-', '_')
+
+print(f'🔍 Starting Cluster-to-Mobile Swarm Test for {service_name}...')
 
 # Kubernetes automatically injects environment variables for services in the same namespace.
-# For the 'mobile-scout' service, these will be available:
-svc_host = os.environ.get('MOBILE_SCOUT_SERVICE_HOST')
-svc_port = os.environ.get('MOBILE_SCOUT_SERVICE_PORT_OLLAMA') or '11434'
+svc_host = os.environ.get(f'{env_prefix}_SERVICE_HOST')
+svc_port = os.environ.get(f'{env_prefix}_SERVICE_PORT_OLLAMA') or '11434'
 
 if not svc_host:
-    print("⚠️  MOBILE_SCOUT_SERVICE_HOST not found. (Are we running inside the cluster?)")
-    print("Falling back to DNS name...")
-    svc_host = 'mobile-scout.agent-execution.svc.cluster.local'
+    print(f"⚠️  {env_prefix}_SERVICE_HOST not found.")
+    print(f"Falling back to DNS name: {service_name}.agent-execution.svc.cluster.local")
+    svc_host = f'{service_name}.agent-execution.svc.cluster.local'
 
 url = f'http://{svc_host}:{svc_port}/api/generate'
 
 payload = json.dumps({
     'model': 'qwen2.5-coder:1.5b',
-    'prompt': 'hi',
+    'prompt': 'Please tell me a short story about code.',
     'stream': False
 }).encode('utf-8')
 
