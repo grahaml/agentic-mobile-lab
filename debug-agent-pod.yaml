@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: debug-agent
+  namespace: agent-execution
+  labels:
+    app: debug-agent
+spec:
+  containers:
+  - name: debug-agent
+    image: debug-agent:ssh
+    imagePullPolicy: IfNotPresent
+    command: ["sleep", "infinity"]
+    volumeMounts:
+    - name: ssh-key
+      mountPath: /root/.ssh/
+      readOnly: true
+  volumes:
+  - name: ssh-key
+    secret:
+      secretName: scout-motorolaedge2023-ssh-key
+      defaultMode: 0400
+      items:
+      - key: id_mobile_scout-motorolaedge2023
+        path: id_rsa
