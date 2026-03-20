@@ -69,6 +69,23 @@ if [ -z "$PHONE_IP" ]; then
     echo "⚠️  WARNING: Could not detect Phone IP. Bridge may fail."
 fi
 
+# Identify Termux User
+echo "🔍 Identifying Termux user environment..."
+# Robust UID lookup via dumpsys
+TERMUX_USER=$(adb shell "dumpsys package com.termux | grep appId=" | head -n 1 | sed 's/.*appId=\([0-9]*\).*/\1/' | tr -d '\r')
+
+if [ -z "$TERMUX_USER" ] || [ "$TERMUX_USER" = "0" ]; then
+    TERMUX_USER="u0_any"
+else
+    # Convert UID to the u0_aXXX format if it's purely numeric
+    if [[ "$TERMUX_USER" =~ ^[0-9]+$ ]]; then
+        if [ "$TERMUX_USER" -gt 10000 ]; then
+            TERMUX_USER="u0_a$((TERMUX_USER - 10000))"
+        fi
+    fi
+fi
+echo "👤 Termux User identified as: $TERMUX_USER"
+
 # --- 3. Secure Payload Delivery (Robust & Idempotent) ---
 echo "📥 Delivering payloads via secure bridge..."
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -103,7 +120,7 @@ adb shell "rm /data/local/tmp/setup.sh /data/local/tmp/mobile_key.pub"
 # Now that SSH is up, we can run the complex setup script reliably
 echo "⚙️  Executing internal setup via SSH..."
 TERMUX_BASH="/data/data/com.termux/files/usr/bin/bash"
-ssh -i "$DEVICE_KEY" -p 8022 -o StrictHostKeyChecking=no "u0_any@$PHONE_IP" "export ANDROID_API_LEVEL=$API_LEVEL && export OLLAMA_HOST=0.0.0.0 && $TERMUX_BASH $TERMUX_HOME/setup.sh"
+ssh -i "$DEVICE_KEY" -p 8022 -o StrictHostKeyChecking=no "$TERMUX_USER@$PHONE_IP" "export ANDROID_API_LEVEL=$API_LEVEL && export OLLAMA_HOST=0.0.0.0 && $TERMUX_BASH $TERMUX_HOME/setup.sh"
 
 # --- 5. Cluster Registration ---
 echo "🔗 Registering in k3s cluster..."
