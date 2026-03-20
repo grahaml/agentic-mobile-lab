@@ -78,23 +78,38 @@ else
     echo "📶 Found Phone IP: $PHONE_IP"
 fi
 
-# 2. Get Termux User (Requires su to see Termux's private dir)
-TERMUX_USER=$(adb shell "su -c 'ls -ld $TERMUX_HOME'" | awk '{print $3}' | tr -d '\r')
+# 2. Identify Termux User
+echo "🔍 Identifying Termux user environment..."
+# Robust UID lookup via dumpsys
+TERMUX_USER=$(adb shell "dumpsys package com.termux | grep appId=" | head -n 1 | sed 's/.*appId=\([0-9]*\).*/\1/' | tr -d '\r')
+
+if [ -z "$TERMUX_USER" ] || [ "$TERMUX_USER" = "0" ]; then
+    # Fallback to filesystem
+    TERMUX_USER=$(adb shell "su -c 'ls -ld /data/data/com.termux/files/home'" | awk '{print $3}' | tr -d '\r')
+fi
+
+# Convert UID to the u0_aXXX format if it's purely numeric
+if [[ "$TERMUX_USER" =~ ^[0-9]+$ ]]; then
+    if [ "$TERMUX_USER" -gt 10000 ]; then
+        TERMUX_USER="u0_a$((TERMUX_USER - 10000))"
+    fi
+fi
+
+if [ -z "$TERMUX_USER" ]; then
+    echo "❌ ERROR: Could not identify Termux user. Please open the Termux app once on the phone."
+    exit 1
+fi
 echo "👤 Termux User identified as: $TERMUX_USER"
 
-# 3. Install Termux Dependencies (Idempotent pkg check)
-TERMUX_BIN="/data/data/com.termux/files/usr/bin"
-echo "📦 Checking Termux dependencies..."
-# Check if sshd is already in the bin folder
-# Note: Using -g 3003 (inet) for all Termux user commands to ensure network access on Android 15
-if adb shell "su -c 'ls $TERMUX_BIN/sshd >/dev/null 2>&1'"; then
-    echo "✅ SSH already installed in Termux."
+# 3. Verify Termux Prerequisites
+echo "📦 Verifying Termux prerequisites..."
+if ! adb shell "pgrep sshd >/dev/null 2>&1"; then
+    echo "❌ ERROR: SSH server (sshd) is not running in Termux."
+    echo "Please open Termux on the phone and run: sshd"
+    exit 1
 else
-    echo "📦 Installing OpenSSH..."
-    adb shell "su -c 'PATH=$TERMUX_BIN:\$PATH $TERMUX_BIN/pkg update -y && PATH=$TERMUX_BIN:\$PATH $TERMUX_BIN/pkg install openssh -y'"
+    echo "✅ SSH server is active."
 fi
-# Always ensure sshd is running
-adb shell "su -c 'pgrep sshd >/dev/null || $TERMUX_BIN/sshd'"
 
 # 3b. Configure Termux Dashboard & Wake Lock
 echo "🪟 Configuring Termux Dashboard & Wake Lock..."

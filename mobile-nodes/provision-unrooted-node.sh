@@ -88,10 +88,11 @@ TERMUX_HOME="/data/data/com.termux/files/home"
 adb shell "cat /data/local/tmp/mobile_key.pub | run-as $TERMUX_PACKAGE sh -c 'mkdir -p $TERMUX_HOME/.ssh && cat > $TERMUX_HOME/.ssh/authorized_keys && chmod 700 $TERMUX_HOME/.ssh && chmod 600 $TERMUX_HOME/.ssh/authorized_keys'"
 adb shell "cat /data/local/tmp/setup.sh | run-as $TERMUX_PACKAGE sh -c 'cat > $TERMUX_HOME/setup.sh && chmod +x $TERMUX_HOME/setup.sh'"
 
-# Start SSHD if not already running
+# Verify SSHD is running
 if ! adb shell "run-as $TERMUX_PACKAGE pgrep sshd" > /dev/null; then
-    echo "🔓 Starting SSH server..."
-    adb shell "run-as $TERMUX_PACKAGE /data/data/com.termux/files/usr/bin/sshd"
+    echo "❌ ERROR: SSH server (sshd) is not running in Termux."
+    echo "Please open Termux on the phone and run: sshd"
+    exit 1
 fi
 
 # Cleanup Bridge
