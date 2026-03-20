@@ -62,22 +62,21 @@ sleep 5
 echo "🪟 Configuring Tmux dashboard..."
 cat << 'EOF' > "$HOME/start-dashboard.sh"
 #!/bin/bash
+
+# Ensure SSH is running
+pgrep sshd >/dev/null || sshd
+
 # Start a new detached tmux session
 tmux new-session -d -s agent-dashboard
 
-# Split vertically
-tmux split-window -v -p 30 -t agent-dashboard:0
-# Split bottom pane horizontally
-tmux split-window -h -p 50 -t agent-dashboard:0.1
+# Split vertically 50/50
+tmux split-window -v -t agent-dashboard:0
 
 # Top pane (0): htop
 tmux send-keys -t agent-dashboard:0.0 "htop" C-m
 
-# Bottom-left pane (1): Ollama server
+# Bottom pane (1): Ollama server
 tmux send-keys -t agent-dashboard:0.1 "export OLLAMA_HOST=0.0.0.0; ollama serve" C-m
-
-# Bottom-right pane (2): Venv and readiness
-tmux send-keys -t agent-dashboard:0.2 "source ~/.venv-llm/bin/activate; echo 'Dashboard Ready!'; ifconfig | grep -E 'inet .*wlan'" C-m
 
 # Attach to session
 tmux attach-session -t agent-dashboard

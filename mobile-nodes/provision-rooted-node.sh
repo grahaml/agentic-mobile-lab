@@ -23,8 +23,9 @@ fi
 TERMUX_PACKAGE="com.termux"
 TERMUX_BOOT_PACKAGE="com.termux.boot"
 
-if ! adb shell pm list packages | grep -q "package:$TERMUX_PACKAGE"; then
-    echo "❌ ERROR: Termux not found on device."
+# Use filesystem check to avoid Binder errors on pm list (requires su for /data/data)
+if ! adb shell "su -c 'ls -d /data/data/$TERMUX_PACKAGE' >/dev/null 2>&1"; then
+    echo "❌ ERROR: Termux not found on device (via /data/data check)."
     echo ""
     echo "Please perform these manual steps on the phone:"
     echo "1. Install Termux from F-Droid."
@@ -35,7 +36,7 @@ if ! adb shell pm list packages | grep -q "package:$TERMUX_PACKAGE"; then
     exit 1
 fi
 
-if ! adb shell pm list packages | grep -q "package:$TERMUX_BOOT_PACKAGE"; then
+if ! adb shell "su -c 'ls -d /data/data/$TERMUX_BOOT_PACKAGE' >/dev/null 2>&1"; then
     echo "⚠️  WARNING: Termux:Boot not found. Automatic start on reboot will not work."
 fi
 
@@ -113,28 +114,27 @@ fi
 
 # 3b. Configure Termux Dashboard & Wake Lock
 echo "🪟 Configuring Termux Dashboard & Wake Lock..."
-adb shell "su $TERMUX_USER -g 3003 -c 'PATH=$TERMUX_BIN:\$PATH $TERMUX_BIN/pkg install tmux htop -y > /dev/null 2>&1'"
-adb shell "su $TERMUX_USER -g 3003 -c 'PATH=$TERMUX_BIN:\$PATH $TERMUX_BIN/termux-wake-lock || true'"
+adb shell "su $TERMUX_USER -g 3003 -c 'PATH=/data/data/com.termux/files/usr/bin:\$PATH /data/data/com.termux/files/usr/bin/pkg install tmux htop -y > /dev/null 2>&1'"
+adb shell "su $TERMUX_USER -g 3003 -c 'PATH=/data/data/com.termux/files/usr/bin:\$PATH /data/data/com.termux/files/usr/bin/termux-wake-lock || true'"
 
 # Generate dashboard script on host and push it
 cat << 'EOF' > start-dashboard.sh
 #!/data/data/com.termux/files/usr/bin/bash
 export PATH="/data/data/com.termux/files/usr/bin:$PATH"
+
+# Ensure SSH is running
+pgrep sshd >/dev/null || sshd
+
 tmux new-session -d -s agent-dashboard
 
-# Split vertically
-tmux split-window -v -p 30 -t agent-dashboard:0
-# Split bottom pane horizontally
-tmux split-window -h -p 50 -t agent-dashboard:0.1
+# Split vertically 50/50
+tmux split-window -v -t agent-dashboard:0
 
 # Top pane (0): htop
 tmux send-keys -t agent-dashboard:0.0 "htop" C-m
 
-# Bottom-left pane (1): Chroot processes or Ollama logs
-tmux send-keys -t agent-dashboard:0.1 "su -c 'chroot /data/local/ubuntu /bin/su - agent-lab -c \"top\"'" C-m
-
-# Bottom-right pane (2): Readiness
-tmux send-keys -t agent-dashboard:0.2 "echo 'Rooted Dashboard Ready!'; ifconfig | grep -E 'inet .*wlan'" C-m
+# Bottom pane (1): Ollama logs
+tmux send-keys -t agent-dashboard:0.1 "su -c 'tail -f /data/local/ubuntu/home/agent-lab/ollama.log'" C-m
 
 # Attach to session
 tmux attach-session -t agent-dashboard
@@ -146,6 +146,13 @@ adb shell "su -c 'mv /data/local/tmp/start-dashboard.sh $TERMUX_HOME/start-dashb
 
 # Auto-launch on open
 adb shell "su -c 'grep -q start-dashboard.sh $TERMUX_HOME/.bashrc 2>/dev/null || echo -e \"\n# Auto-start dashboard\nif [ -z \\\"\$TMUX\\\" ]; then\n    ~/start-dashboard.sh\nfi\" >> $TERMUX_HOME/.bashrc'"
+
+# 3c. Configure Termux:Boot script
+echo "🚀 Configuring Termux:Boot startup script..."
+adb shell "su -c 'mkdir -p $TERMUX_HOME/.termux/boot && \
+                 echo -e \"#!/data/data/com.termux/files/usr/bin/bash\nsshd\ntermux-wake-lock\n~/start-dashboard.sh\" > $TERMUX_HOME/.termux/boot/start-agent && \
+                 chown -R $TERMUX_USER:$TERMUX_USER $TERMUX_HOME/.termux && \
+                 chmod +x $TERMUX_HOME/.termux/boot/start-agent'"
 
 # 4. Prepare Ubuntu Chroot Environment (Idempotent Ollama binary check)
 echo "🧪 Checking Ubuntu Chroot dependencies..."
@@ -186,7 +193,7 @@ fi
 # 6. Bootstrap Ollama & Models (Idempotent model check)
 echo "📥 Checking model $MODEL_NAME..."
 # Start ollama if not running (binding to all interfaces for cluster access)
-adb shell "su -c 'su -g 3003 -c \"chroot $UBUNTU_ROOT /bin/su - agent-lab -c \\\"pgrep ollama >/dev/null || (export OLLAMA_HOST=0.0.0.0 && /usr/local/bin/ollama serve > /dev/null 2>&1 & sleep 5)\\\"\"'"
+adb shell "su -c 'su -g 3003 -c \"chroot $UBUNTU_ROOT /bin/su - agent-lab -c \\\"pgrep ollama >/dev/null || (export OLLAMA_HOST=0.0.0.0 && /usr/local/bin/ollama serve > ~/ollama.log 2>&1 & sleep 5)\\\"\"'"
 # Check if model is already pulled
 if adb shell "su -c 'su -g 3003 -c \"chroot $UBUNTU_ROOT /bin/su - agent-lab -c \\\"/usr/local/bin/ollama list\\\"\"' | grep -q \"$MODEL_NAME\""; then
     echo "✅ Model $MODEL_NAME already pulled."

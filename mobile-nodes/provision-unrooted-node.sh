@@ -21,8 +21,9 @@ fi
 
 # 2b. Prerequisites Check (Manual Installation Required)
 TERMUX_BOOT_PACKAGE="com.termux.boot"
-if ! adb shell pm list packages | grep -q "package:$TERMUX_PACKAGE"; then
-    echo "❌ ERROR: Termux not found on device."
+# Use filesystem/run-as check to avoid Binder errors on pm list
+if ! adb shell "run-as $TERMUX_PACKAGE ls >/dev/null 2>&1"; then
+    echo "❌ ERROR: Termux not found on device (via run-as check)."
     echo ""
     echo "Please perform these manual steps on the phone:"
     echo "1. Install Termux from F-Droid."
@@ -33,7 +34,7 @@ if ! adb shell pm list packages | grep -q "package:$TERMUX_PACKAGE"; then
     exit 1
 fi
 
-if ! adb shell pm list packages | grep -q "package:$TERMUX_BOOT_PACKAGE"; then
+if ! adb shell "run-as $TERMUX_BOOT_PACKAGE ls >/dev/null 2>&1"; then
     echo "⚠️  WARNING: Termux:Boot not found. Automatic start on reboot will not work."
 fi
 
