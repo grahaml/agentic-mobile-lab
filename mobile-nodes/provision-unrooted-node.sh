@@ -19,25 +19,22 @@ if ! adb devices | grep -q "device$"; then
     exit 1
 fi
 
-# 2b. Automated Termux Installation Check
+# 2b. Prerequisites Check (Manual Installation Required)
+TERMUX_BOOT_PACKAGE="com.termux.boot"
 if ! adb shell pm list packages | grep -q "package:$TERMUX_PACKAGE"; then
-    echo "📦 Termux not found. Attempting automated installation..."
-    # Find the APK in the project root
-    APK_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../../" && pwd )/termux.apk"
-    if [ -f "$APK_PATH" ]; then
-        echo "📥 Installing $APK_PATH..."
-        adb install "$APK_PATH"
-        # Grant Storage permissions blindly to avoid broken screen prompts
-        echo "🔐 Pre-granting Storage permissions..."
-        adb shell pm grant "$TERMUX_PACKAGE" android.permission.READ_EXTERNAL_STORAGE || true
-        adb shell pm grant "$TERMUX_PACKAGE" android.permission.WRITE_EXTERNAL_STORAGE || true
-    else
-        echo "❌ ERROR: termux.apk not found at $APK_PATH."
-        echo "Please place termux.apk in the project root or install it manually."
-        exit 1
-    fi
-else
-    echo "✅ Termux already installed."
+    echo "❌ ERROR: Termux not found on device."
+    echo ""
+    echo "Please perform these manual steps on the phone:"
+    echo "1. Install Termux from F-Droid."
+    echo "2. (Optional) Install Termux:Boot from F-Droid."
+    echo "3. Open Termux and run: pkg update && pkg install openssh -y"
+    echo "4. Start the SSH server by running: sshd"
+    echo ""
+    exit 1
+fi
+
+if ! adb shell pm list packages | grep -q "package:$TERMUX_BOOT_PACKAGE"; then
+    echo "⚠️  WARNING: Termux:Boot not found. Automatic start on reboot will not work."
 fi
 
 # --- Power Management & Stability (Cascading Hacks) ---

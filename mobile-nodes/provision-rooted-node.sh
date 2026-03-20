@@ -19,6 +19,26 @@ if ! adb devices | grep -q "device$"; then
     exit 1
 fi
 
+# 1b. Prerequisites Check (Manual Installation Required)
+TERMUX_PACKAGE="com.termux"
+TERMUX_BOOT_PACKAGE="com.termux.boot"
+
+if ! adb shell pm list packages | grep -q "package:$TERMUX_PACKAGE"; then
+    echo "❌ ERROR: Termux not found on device."
+    echo ""
+    echo "Please perform these manual steps on the phone:"
+    echo "1. Install Termux from F-Droid."
+    echo "2. (Optional) Install Termux:Boot from F-Droid."
+    echo "3. Open Termux and run: pkg update && pkg install openssh -y"
+    echo "4. Start the SSH server by running: sshd"
+    echo ""
+    exit 1
+fi
+
+if ! adb shell pm list packages | grep -q "package:$TERMUX_BOOT_PACKAGE"; then
+    echo "⚠️  WARNING: Termux:Boot not found. Automatic start on reboot will not work."
+fi
+
 # --- Power Management & Stability (Cascading Hacks) ---
 echo "👻 Hardening background stability and Wi-Fi (Cascading)..."
 # 1. Phantom Process Killer (Android 12+)
