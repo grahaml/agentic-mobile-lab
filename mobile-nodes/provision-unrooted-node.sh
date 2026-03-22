@@ -71,8 +71,8 @@ fi
 
 # Identify Termux User
 echo "🔍 Identifying Termux user environment..."
-# Robust UID lookup via dumpsys
-TERMUX_USER=$(adb shell "dumpsys package com.termux | grep appId=" | head -n 1 | sed 's/.*appId=\([0-9]*\).*/\1/' | tr -d '\r')
+# Robust UID lookup via dumpsys (targets appId or userId)
+TERMUX_USER=$(adb shell "dumpsys package com.termux | grep -E 'appId=|userId=' | head -n 1 | sed 's/.*Id=\([0-9]*\).*/\1/' | tr -d '\r'")
 
 if [ -z "$TERMUX_USER" ] || [ "$TERMUX_USER" = "0" ]; then
     TERMUX_USER="u0_any"
@@ -107,7 +107,7 @@ adb shell "cat /data/local/tmp/mobile_key.pub | run-as $TERMUX_PACKAGE sh -c 'mk
 adb shell "cat /data/local/tmp/setup.sh | run-as $TERMUX_PACKAGE sh -c 'cat > $TERMUX_HOME/setup.sh && chmod +x $TERMUX_HOME/setup.sh'"
 
 # Verify SSHD is running
-if ! adb shell "run-as $TERMUX_PACKAGE pgrep sshd" > /dev/null; then
+if ! adb shell "run-as $TERMUX_PACKAGE sh -c 'pgrep sshd'" > /dev/null; then
     echo "❌ ERROR: SSH server (sshd) is not running in Termux."
     echo "Please open Termux on the phone and run: sshd"
     exit 1

@@ -18,8 +18,8 @@ spec:
   volumes:
   - name: ssh-key
     secret:
-      secretName: scout-motorolaedge2023-ssh-key
+      secretName: scout-s10e-ssh-key
       defaultMode: 0400
       items:
-      - key: id_mobile_scout-motorolaedge2023
+      - key: id_mobile_scout-s10e
         path: id_rsa

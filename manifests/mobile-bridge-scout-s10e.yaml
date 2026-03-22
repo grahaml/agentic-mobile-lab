@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: scout-s10e
+  namespace: agent-execution
+  labels:
+    agent-role: scout
+    device-id: s10e
+    device-type: mobile
+spec:
+  ports:
+    - name: ssh
+      port: 8022
+      targetPort: 8022
+    - name: ollama
+      port: 11434
+      targetPort: 11434
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: scout-s10e
+  namespace: agent-execution
+subsets:
+  - addresses:
+      - ip: 192.168.4.55
+    ports:
+      - name: ssh
+        port: 8022
+      - name: ollama
+        port: 11434
