@@ -57,6 +57,47 @@ adb shell dumpsys deviceidle whitelist +com.termux >/dev/null 2>&1 || true
 # 4. Screen Timeout Override (Optional/Fallback)
 adb shell settings put system screen_off_timeout 2147483647 >/dev/null 2>&1 || true
 
+# --- 5. Device-Specific Performance Tuning (aion/Motorola Edge) ---
+DEVICE_MODEL=$(adb shell getprop ro.product.model | tr -d '\r' | tr -cd '[:alnum:]_-' | tr '[:upper:]' '[:lower:]')
+
+if [[ "$DEVICE_MODEL" == *"motorolaedge"* ]] || [[ "$DEVICE_MODEL" == *"aion"* ]]; then
+    echo "⚡ Motorola Edge 2023 (aion) detected. Applying Performance Profile..."
+    
+    # Push and run performance-tuning.sh
+    DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    if [ -f "$DIR/performance-tuning.sh" ]; then
+        adb push "$DIR/performance-tuning.sh" /data/local/tmp/performance-tuning.sh
+        adb shell "su -c 'sh /data/local/tmp/performance-tuning.sh && rm /data/local/tmp/performance-tuning.sh'"
+    fi
+
+    echo "🧹 Stripping bloatware (aion)..."
+    PACKAGES=(
+        "com.facebook.services"
+        "com.facebook.system"
+        "com.facebook.appmanager"
+        "com.motorola.brapps"
+        "com.motorola.ccc.notification"
+        "com.motorola.motocare"
+        "com.motorola.genie"
+        "com.motorola.aiservices"
+        "com.motorola.dimo"
+        "com.motorola.securityhub"
+        "com.inmobi.weather"
+        "com.mobileposse.client"
+        "com.aura.oem.monitor"
+        "com.digitalturbine.ignoredetector.motorola"
+        "com.motorola.msm"
+    )
+
+    for pkg in "${PACKAGES[@]}"; do
+        # Use pm list packages to check if installed first
+        if adb shell "pm list packages | grep -q $pkg"; then
+            echo "  - Removing: $pkg"
+            adb shell "pm uninstall -k --user 0 $pkg" >/dev/null 2>&1 || true
+        fi
+    done
+fi
+
 echo "💡 NOTE: Please manually verify 'Unrestricted' battery usage for Termux in Android Settings if disconnects persist."
 
 # Get functional role (e.g., matrix-host, scout) from argument

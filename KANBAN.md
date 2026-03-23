@@ -2,8 +2,6 @@
 
 ## 📋 Backlog
 ### 🧪 Testing & Validation
-- [ ] [TEST-001] Build comprehensive, documented test runner (align with "Private Agent Runtime" article) | #high
-- [x] [TEST-002] Re-test Samsung S10e node stability | #med | Completed 2026-03-22
 - [ ] [TEST-003] Re-test Motorola Edge node stability | #med
 - [ ] [TEST-004] Re-test Mistral performance in k3s cluster | #high
 
@@ -23,13 +21,17 @@
   - [ ] [APP-001-F] Setup Observability (Termux Dashboard/btop)
 
 ### 🤖 Agentic Infrastructure
-- [ ] [APP-003] Develop platform capability for dynamic device metadata resolution (SSH user, IP, Port) | #high
 - [ ] [APP-002] Finalize agentic harness (Aider vs. Claude Code vs. Custom Bash) | #critical
 
 ## 🏗️ In Progress
 - [ ] [APP-003] Develop platform capability for dynamic device metadata resolution (SSH user, IP, Port) | #high (Base whitelist implemented in test-mobile-node-via-ssh.py)
 
 ## ✅ Done
+- [x] [APP-004] Create Dynamic Agent Executor (`swarm-agent.py`) | #critical | Completed 2026-03-22
+  - [x] [APP-004-A] Draft `swarm-agent.py` Spec | [Spec](specs/dynamic-agent-executor.md)
+  - [x] [APP-004-B] Implement dynamic Secret mounting logic (RBAC-based) | [RBAC Manifest](manifests/agent-executor-rbac.yaml)
+  - [x] [APP-004-C] Implement automated Pod lifecycle (Create -> Exec -> Cleanup)
+- [x] [TEST-002] Re-test Samsung S10e node stability | #med | Completed 2026-03-22
 - [x] [TEST-001] Build comprehensive, documented test runner (align with "Private Agent Runtime" article) | #high | Completed 2026-03-22
 - [x] [MIG-006] Re-pull AI models (mistral) | #low | Completed 2026-03-22
 - [x] [MIG-007] Refactor `setup.sh` | #med | Completed 2026-03-22
