@@ -8,7 +8,7 @@ set -e # Exit immediately if a command exits with a non-zero status
 CLUSTER_NAME="agent-sandbox"
 NAMESPACE_AGENTS="agent-execution"
 NAMESPACE_OLLAMA="ollama-system"
-MODEL_NAME="qwen2.5:0.5b" # CPU-friendly model
+MODEL_NAME="mistral" # Stable 7B model
 
 echo "🚀 Starting Local AI Swarm Installation for Ubuntu..."
 
