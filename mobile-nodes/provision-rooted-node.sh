@@ -155,7 +155,8 @@ fi
 
 # 3b. Configure Termux Dashboard & Wake Lock
 echo "🪟 Configuring Termux Dashboard & Wake Lock..."
-adb shell "su $TERMUX_USER -g 3003 -c 'PATH=/data/data/com.termux/files/usr/bin:\$PATH /data/data/com.termux/files/usr/bin/pkg install tmux htop -y > /dev/null 2>&1'"
+adb shell "su $TERMUX_USER -g 3003 -c 'PATH=/data/data/com.termux/files/usr/bin:\$PATH /data/data/com.termux/files/usr/bin/pkg install root-repo -y > /dev/null 2>&1 || true'"
+adb shell "su $TERMUX_USER -g 3003 -c 'PATH=/data/data/com.termux/files/usr/bin:\$PATH /data/data/com.termux/files/usr/bin/pkg install tmux btop viddy -y > /dev/null 2>&1'"
 adb shell "su $TERMUX_USER -g 3003 -c 'PATH=/data/data/com.termux/files/usr/bin:\$PATH /data/data/com.termux/files/usr/bin/termux-wake-lock || true'"
 
 # Generate dashboard script on host and push it
@@ -166,16 +167,33 @@ export PATH="/data/data/com.termux/files/usr/bin:$PATH"
 # Ensure SSH is running
 pgrep sshd >/dev/null || sshd
 
-tmux new-session -d -s agent-dashboard
+# Ensure Ubuntu Chroot is mounted and Ollama is running
+# Note: We use su -c because these require root on the Android host
+su -c '
+    UBUNTU_ROOT="/data/local/ubuntu"
+    mount | grep -q "$UBUNTU_ROOT/proc" || mount -t proc proc "$UBUNTU_ROOT/proc"
+    mount | grep -q "$UBUNTU_ROOT/sys" || mount -t sysfs sys "$UBUNTU_ROOT/sys"
+    mount | grep -q "$UBUNTU_ROOT/dev" || mount --bind /dev "$UBUNTU_ROOT/dev"
+    mount | grep -q "$UBUNTU_ROOT/dev/pts" || mount --bind /dev/pts "$UBUNTU_ROOT/dev/pts"
+    
+    # Start Ollama if not running
+    su -g 3003 -c "chroot $UBUNTU_ROOT /bin/su - agent-lab -c \"pgrep ollama >/dev/null || (export OLLAMA_HOST=0.0.0.0 && /usr/local/bin/ollama serve > ~/ollama.log 2>&1 &)\""
+'
 
-# Split vertically 50/50
-tmux split-window -v -t agent-dashboard:0
+# Start a new detached tmux session
+tmux has-session -t agent-dashboard 2>/dev/null
+if [ $? != 0 ]; then
+    tmux new-session -d -s agent-dashboard
 
-# Top pane (0): htop
-tmux send-keys -t agent-dashboard:0.0 "htop" C-m
+    # Top pane (0): btop
+    tmux send-keys -t agent-dashboard:0.0 "btop" C-m
 
-# Bottom pane (1): Ollama logs
-tmux send-keys -t agent-dashboard:0.1 "su -c 'tail -f /data/local/ubuntu/home/agent-lab/ollama.log'" C-m
+    # Split vertically (Pane 1 at 70% down)
+    tmux split-window -v -p 30 -t agent-dashboard:0.0
+
+    # Bottom pane (1): Chrooted Ollama status (using viddy)
+    tmux send-keys -t agent-dashboard:0.1 "viddy -n 2 \"su -c 'su -g 3003 -c \\\"chroot /data/local/ubuntu /usr/local/bin/ollama ps\\\"'\"" C-m
+fi
 
 # Attach to session
 tmux attach-session -t agent-dashboard

@@ -21,17 +21,22 @@ fi
 
 # 2b. Prerequisites Check (Manual Installation Required)
 TERMUX_BOOT_PACKAGE="com.termux.boot"
-# Use filesystem/run-as check to avoid Binder errors on pm list
+# Use filesystem/run-as check to avoid Binder errors on pm list, but fallback to pm list
 if ! adb shell "run-as $TERMUX_PACKAGE ls >/dev/null 2>&1"; then
-    echo "❌ ERROR: Termux not found on device (via run-as check)."
-    echo ""
-    echo "Please perform these manual steps on the phone:"
-    echo "1. Install Termux from F-Droid."
-    echo "2. (Optional) Install Termux:Boot from F-Droid."
-    echo "3. Open Termux and run: pkg update && pkg install openssh -y"
-    echo "4. Start the SSH server by running: sshd"
-    echo ""
-    exit 1
+    if adb shell "pm list packages | grep -q $TERMUX_PACKAGE"; then
+        echo "⚠️  WARNING: Termux found but 'run-as' failed (Standard for non-debuggable builds)."
+        echo "🔗 Attempting to proceed via existing SSH if available..."
+    else
+        echo "❌ ERROR: Termux not found on device."
+        echo ""
+        echo "Please perform these manual steps on the phone:"
+        echo "1. Install Termux from F-Droid."
+        echo "2. (Optional) Install Termux:Boot from F-Droid."
+        echo "3. Open Termux and run: pkg update && pkg install openssh -y"
+        echo "4. Start the SSH server by running: sshd"
+        echo ""
+        exit 1
+    fi
 fi
 
 if ! adb shell "run-as $TERMUX_BOOT_PACKAGE ls >/dev/null 2>&1"; then
@@ -103,18 +108,63 @@ adb push "${DEVICE_KEY}.pub" /data/local/tmp/mobile_key.pub
 # Inject identity and scripts into Termux scope
 echo "🔑 Finalizing identity and starting services..."
 TERMUX_HOME="/data/data/com.termux/files/home"
-adb shell "cat /data/local/tmp/mobile_key.pub | run-as $TERMUX_PACKAGE sh -c 'mkdir -p $TERMUX_HOME/.ssh && cat > $TERMUX_HOME/.ssh/authorized_keys && chmod 700 $TERMUX_HOME/.ssh && chmod 600 $TERMUX_HOME/.ssh/authorized_keys'"
-adb shell "cat /data/local/tmp/setup.sh | run-as $TERMUX_PACKAGE sh -c 'cat > $TERMUX_HOME/setup.sh && chmod +x $TERMUX_HOME/setup.sh'"
 
-# Verify SSHD is running
-if ! adb shell "run-as $TERMUX_PACKAGE sh -c 'pgrep sshd'" > /dev/null; then
-    echo "❌ ERROR: SSH server (sshd) is not running in Termux."
-    echo "Please open Termux on the phone and run: sshd"
-    exit 1
+# Push to neutral location first
+adb push "$DIR/mobile-agent-setup.sh" /sdcard/setup.sh
+adb push "${DEVICE_KEY}.pub" /sdcard/mobile_key.pub
+
+if adb shell "run-as $TERMUX_PACKAGE sh -c 'ls /data/data/com.termux >/dev/null 2>&1'"; then
+    adb shell "cat /sdcard/mobile_key.pub | run-as $TERMUX_PACKAGE sh -c 'mkdir -p $TERMUX_HOME/.ssh && cat >> $TERMUX_HOME/.ssh/authorized_keys && chmod 700 $TERMUX_HOME/.ssh && chmod 600 $TERMUX_HOME/.ssh/authorized_keys'"
+    adb shell "cat /sdcard/setup.sh | run-as $TERMUX_PACKAGE sh -c 'cat > $TERMUX_HOME/setup.sh && chmod +x $TERMUX_HOME/setup.sh'"
+else
+    echo "🔗 'run-as' failed. Granting storage permissions and using ADB input fallback..."
+    adb shell pm grant com.termux android.permission.READ_EXTERNAL_STORAGE >/dev/null 2>&1 || true
+    adb shell pm grant com.termux android.permission.WRITE_EXTERNAL_STORAGE >/dev/null 2>&1 || true
+    
+    # Ensure Termux is in focus
+    adb shell am start -n com.termux/com.termux.app.TermuxActivity
+    sleep 2
+    
+    # Use absolute paths for the 'cd' but then relative for the rest
+    T_HOME="/data/data/com.termux/files/home"
+    
+    # Clear line and send commands
+    adb shell input keyevent 66 # Enter to clear prompt
+    
+    echo "  - Navigating to home and preparing .ssh..."
+    adb shell "input text \"cd $T_HOME\"" && adb shell input keyevent 66
+    adb shell 'input text "mkdir"' && adb shell input keyevent 62 && adb shell 'input text "-p"' && adb shell input keyevent 62 && adb shell 'input text ".ssh"' && adb shell input keyevent 66
+    sleep 1
+    
+    echo "  - Importing public key from /sdcard..."
+    # Note: We use absolute path for /sdcard source
+    adb shell 'input text "cat"' && adb shell input keyevent 62 && adb shell 'input text "/sdcard/mobile_key.pub"' && adb shell input keyevent 62 && adb shell 'input text ">"' && adb shell input keyevent 62 && adb shell 'input text ".ssh/authorized_keys"' && adb shell input keyevent 66
+    sleep 1
+    
+    echo "  - Setting permissions..."
+    adb shell 'input text "chmod"' && adb shell input keyevent 62 && adb shell 'input text "700"' && adb shell input keyevent 62 && adb shell 'input text ".ssh"' && adb shell input keyevent 66
+    adb shell 'input text "chmod"' && adb shell input keyevent 62 && adb shell 'input text "600"' && adb shell input keyevent 62 && adb shell 'input text ".ssh/authorized_keys"' && adb shell input keyevent 66
+    
+    echo "  - Importing setup script..."
+    adb shell 'input text "cat"' && adb shell input keyevent 62 && adb shell 'input text "/sdcard/setup.sh"' && adb shell input keyevent 62 && adb shell 'input text ">"' && adb shell input keyevent 62 && adb shell 'input text "setup.sh"' && adb shell input keyevent 66
+    adb shell 'input text "chmod"' && adb shell input keyevent 62 && adb shell 'input text "+x"' && adb shell input keyevent 62 && adb shell 'input text "setup.sh"' && adb shell input keyevent 66
+    
+    echo "  - Restarting SSH daemon..."
+    adb shell 'input text "pkill"' && adb shell input keyevent 62 && adb shell 'input text "-f"' && adb shell input keyevent 62 && adb shell 'input text "sshd"' && adb shell input keyevent 66
+    sleep 1
+    adb shell 'input text "sshd"' && adb shell input keyevent 66
+    sleep 5
 fi
 
 # Cleanup Bridge
-adb shell "rm /data/local/tmp/setup.sh /data/local/tmp/mobile_key.pub"
+adb shell "rm /sdcard/setup.sh /sdcard/mobile_key.pub"
+
+# Verify SSHD is running
+if ! nc -zv "$PHONE_IP" 8022 >/dev/null 2>&1; then
+    echo "❌ ERROR: SSH server (sshd) is not reachable at $PHONE_IP:8022."
+    echo "Please open Termux on the phone and run: sshd"
+    exit 1
+fi
 
 # --- 4. Atomic Execution via SSH ---
 # Now that SSH is up, we can run the complex setup script reliably

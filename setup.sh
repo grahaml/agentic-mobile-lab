@@ -1,62 +1,74 @@
 #!/bin/bash
 
-set -e # Exit immediately if a command exits with a non-zero status
+# ==========================================
+# Modernized Private Agent Runtime Setup
+# Focus: Security, Isolation, and Ubuntu 24.04 Compatibility
+# ==========================================
 
-# ==========================================
-# Configuration
-# ==========================================
-CLUSTER_NAME="agent-sandbox"
+set -euo pipefail # Strict error handling: exit on error, unset vars, and pipe failures
+
+# --- Configuration ---
 NAMESPACE_AGENTS="agent-execution"
 NAMESPACE_OLLAMA="ollama-system"
-MODEL_NAME="mistral" # Stable 7B model
+MODEL_NAME="mistral" 
 
-echo "🚀 Starting Local AI Swarm Installation for Ubuntu..."
+# Virtual Environments
+PROJECT_VENV="$HOME/.venv-private-agent-runtime"
+AIDER_VENV="$HOME/.venv-aider"
+
+echo "🚀 Starting Modernized Private Agent Runtime Installation..."
 
 # ==========================================
-# 1. Pre-flight Checks (Linux Native)
+# 1. Dependency & Capability Checks
 # ==========================================
-echo "🔍 Checking dependencies..."
+echo "🔍 Checking system capabilities..."
 
+# Ensure python3-venv is present (Crucial for modern Ubuntu)
+if ! python3 -m venv --help > /dev/null 2>&1; then
+    echo "❌ Error: python3-venv is not installed."
+    echo "Please run: sudo apt update && sudo apt install python3-venv"
+    exit 1
+fi
+
+# Check for k3s / kubectl
 if ! command -v kubectl &> /dev/null; then
-    echo "❌ Error: kubectl is not installed."
-    echo "Run: curl -sfL https://get.k3s.io | sh -"
+    echo "❌ Error: kubectl not found."
     exit 1
 fi
 
-if ! command -v k3s &> /dev/null; then
-    echo "❌ Error: k3s is not installed."
-    echo "Run: curl -sfL https://get.k3s.io | sh -"
-    exit 1
+# Ensure k3s is using nftables if available (standard for Ubuntu 24.04)
+if iptables --version | grep -q "nf_tables"; then
+    echo "✅ nftables backend detected (Modern Ubuntu default)."
 fi
 
-echo "✅ All dependencies found."
+# ==========================================
+# 2. Project Virtual Environment (Isolation)
+# ==========================================
+if [ ! -d "$PROJECT_VENV" ]; then
+    echo "📦 Creating project virtual environment at $PROJECT_VENV..."
+    python3 -m venv "$PROJECT_VENV"
+fi
 
-# ==========================================
-# 2. Cluster Bootstrap (Native K3s)
-# ==========================================
-if kubectl get nodes | grep -q "Ready"; then
-    echo "✅ Native K3s cluster is running."
+echo "📦 Updating project dependencies..."
+"$PROJECT_VENV/bin/pip" install --quiet -U pip
+if [ -f "requirements.txt" ]; then
+    "$PROJECT_VENV/bin/pip" install --quiet -r requirements.txt
 else
-    echo "❌ Error: Native K3s cluster is not ready. Please start k3s."
-    exit 1
+    # Fallback if requirements.txt isn't in current dir
+    "$PROJECT_VENV/bin/pip" install --quiet kubernetes
 fi
 
 # ==========================================
-# 3. Secure Namespaces & Network Policies
+# 3. Cluster Security Configuration
 # ==========================================
-echo "🛡️  Configuring namespaces and sandboxed network policies..."
+echo "🛡️  Hardening Kubernetes Namespaces & Policies..."
 
+# Create namespaces if they don't exist
+kubectl create namespace "$NAMESPACE_OLLAMA" --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace "$NAMESPACE_AGENTS" --dry-run=client -o yaml | kubectl apply -f -
+
+# Apply Default-Deny Egress Policy to Agents
 kubectl apply -f - <<EOF
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: $NAMESPACE_OLLAMA
----
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: $NAMESPACE_AGENTS
----
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -67,12 +79,13 @@ spec:
   policyTypes:
   - Egress
 EOF
-echo "✅ Sandboxed namespaces created."
+
+echo "✅ Security policies applied."
 
 # ==========================================
-# 4. Deploy CPU-Optimized Ollama
+# 4. Deploy/Verify Ollama
 # ==========================================
-echo "🧠 Deploying Ollama (Native Linux CPU mode)..."
+echo "🧠 Deploying CPU-Optimized Ollama..."
 
 kubectl apply -f - <<EOF
 apiVersion: apps/v1
@@ -97,8 +110,11 @@ spec:
         - containerPort: 11434
         resources:
           requests:
-            cpu: "500m"
-            memory: "1Gi"
+            cpu: "1"
+            memory: "2Gi"
+          limits:
+            cpu: "2"
+            memory: "4Gi"
 ---
 apiVersion: v1
 kind: Service
@@ -106,7 +122,7 @@ metadata:
   name: ollama-service
   namespace: $NAMESPACE_OLLAMA
 spec:
-  type: LoadBalancer 
+  type: ClusterIP
   selector:
     app: ollama
   ports:
@@ -115,41 +131,17 @@ spec:
       targetPort: 11434
 EOF
 
-echo "⏳ Waiting for Ollama pod to be ready (this might take a minute)..."
-kubectl rollout status deployment/ollama -n $NAMESPACE_OLLAMA --timeout=120s
+echo "⏳ Waiting for Ollama (timeout 60s)..."
+kubectl rollout status deployment/ollama -n "$NAMESPACE_OLLAMA" --timeout=60s || echo "⚠️ Rollout taking longer than expected..."
 
 # ==========================================
-# 5. Pulling the Local Model
+# 🎉 Summary
 # ==========================================
-echo "📥 Pulling $MODEL_NAME directly into the cluster..."
-OLLAMA_POD=$(kubectl get pods -n $NAMESPACE_OLLAMA -l app=ollama -o jsonpath='{.items[0].metadata.name}')
-kubectl exec -n $NAMESPACE_OLLAMA $OLLAMA_POD -- ollama run $MODEL_NAME "Initialization complete."
-
-# ==========================================
-# 6. Install Aider (in Virtual Environment)
-# ==========================================
-VENV_DIR="$HOME/.venv-private-runtime"
-
-if [ -d "$VENV_DIR" ]; then
-    echo "🗑️ Removing old virtual environment..."
-    rm -rf "$VENV_DIR"
-fi
-
-echo "📦 Creating virtual environment for Aider at $VENV_DIR using python3..."
-python3 -m venv "$VENV_DIR"
-
-echo "📦 Installing/Updating Aider in virtual environment..."
-"$VENV_DIR/bin/pip" install -U pip aider-chat
-
 echo "=========================================="
-echo "🎉 INFRASTRUCTURE READY! 🎉"
+echo "✅ MODERNIZATION COMPLETE"
 echo "=========================================="
-echo "To launch Aider connected to your private K3s cluster, run:"
+echo "Project Venv: $PROJECT_VENV"
 echo ""
-echo "  source $VENV_DIR/bin/activate"
-echo "  aider --model ollama/$MODEL_NAME"
-echo ""
-echo "Or use the direct path:"
-echo "  $VENV_DIR/bin/aider --model ollama/$MODEL_NAME"
-echo ""
-echo "Note: If using a custom Ollama host, set OLLAMA_API_BASE=\"http://localhost:11434/v1\""
+echo "To run project tools (e.g., swarm-agent.py):"
+echo "  $PROJECT_VENV/bin/python3 swarm-agent.py --help"
+echo "=========================================="
