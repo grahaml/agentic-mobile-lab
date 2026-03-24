@@ -1,0 +1,18 @@
+graph TD
+    subgraph Host ["🖥️ Linux Host"]
+        subgraph k3s ["☸️ Native k3s Cluster"]
+            subgraph NS_Ollama ["Namespace: ollama-system"]
+                Ollama["🧠 Ollama Server"]
+            end
+            subgraph NS_Agents ["Namespace: agent-execution"]
+                Agent["🤖 Agent Pods"]
+                Policy["🛡️ NetPolicy: Deny-Egress"]
+            end
+        end
+    end
+    
+    subgraph External ["🌐 Public Internet"]
+    end
+
+    Agent -.->|Blocked| External
+    Agent -->|Inference| Ollama

@@ -1,0 +1,17 @@
+graph TD
+    subgraph K8s ["☸️ Kubernetes Cluster"]
+        SVC["🌉 Service: mobile-scout"]
+        EP["📍 Endpoint: LAN IP"]
+        SVC --> EP
+    end
+
+    subgraph Phone ["📱 Mobile Node (Android)"]
+        Termux["🐚 Termux Gateway (Port 8022)"]
+        Chroot["📦 Ubuntu Sandbox"]
+        Dispatcher["📜 enter_lab.sh"]
+        
+        Termux --> Dispatcher
+        Dispatcher --> Chroot
+    end
+
+    EP -- "SSH Protocol" --> Termux

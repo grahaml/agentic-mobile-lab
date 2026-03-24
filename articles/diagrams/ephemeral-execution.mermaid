@@ -1,0 +1,11 @@
+sequenceDiagram
+    participant Agent as Agent/Host
+    participant K8s as K8s API
+    participant Pod as Ephemeral Pod
+    
+    Agent->>K8s: Create Pod (Base64 Code Injection)
+    K8s->>Pod: Pull image & start
+    Pod->>Pod: Decode & Execute Python
+    Pod-->>Agent: Stream Logs & Stdout
+    Agent->>K8s: Delete Pod
+    Note over Pod: Pod Terminated (Zero Residue)

@@ -1,0 +1,10 @@
+graph LR
+    Pod["🤖 Agent Pod"]
+    NP["🛡️ NetworkPolicy"]
+    CNI["⚙️ Standard CNI"]
+    CNI_Fix["⚙️ K3s Controller (Native)"]
+    Internet["🌐 Internet"]
+
+    Pod --> NP
+    NP --> CNI -->|Bypass!| Internet
+    NP --> CNI_Fix -->|BLOCK| Internet
