@@ -1,106 +1,80 @@
 import uuid
-import time
 import base64
 import argparse
-import sys
-import os
-import shlex
 from kubernetes import client, config, watch
 
-# --- Device Registry (Platform Capability) ---
-DEVICE_METADATA = {
-    "scout-sm-g970w": {
-        "user": "u0_a293",
-        "port": 8022,
-        "host": "scout-sm-g970w.agent-execution.svc.cluster.local",
-        "mode": "direct",
-        "model": "mistral",
-        "secret": "scout-sm-g970w-ssh-key",
-        "key_field": "id_mobile_scout-sm-g970w"
-    },
-    "scout-motorolaedge2023": {
-        "user": "u0_a293",
-        "port": 8022,
-        "host": "scout-motorolaedge2023.agent-execution.svc.cluster.local",
-        "mode": "chroot",
-        "model": "mistral",
-        "secret": "scout-motorolaedge2023-ssh-key",
-        "key_field": "id_mobile_scout-motorolaedge2023"
-    }
-}
+def get_mobile_nodes(namespace="agent-execution"):
+    """Query Kubernetes for available services in the given namespace."""
+    try:
+        v1 = client.CoreV1Api()
+        services = v1.list_namespaced_service(namespace=namespace)
+        # Returns the names of all services found
+        return [svc.metadata.name for svc in services.items]
+    except Exception as e:
+        print(f"⚠️ Error fetching services: {e}")
+        return []
 
 def generate_in_pod_script(device_name, prompt):
-    metadata = DEVICE_METADATA[device_name]
-    secret_name = metadata["secret"]
-    key_field = metadata["key_field"]
-    user = metadata["user"]
-    host = metadata["host"]
-    port = metadata["port"]
-    mode = metadata["mode"]
-    model = metadata["model"]
+    host = f"{device_name}.agent-execution.svc.cluster.local"
+    port = 11434
     
-    sanitized_prompt = shlex.quote(prompt)
+    # Securely pass prompt to pod script
+    encoded_prompt = base64.b64encode(prompt.encode('utf-8')).decode('utf-8')
     
-    if mode == "chroot":
-        remote_cmd = f"~/enter_lab.sh audit {sanitized_prompt}"
-    else:
-        remote_cmd = f"~/.venv-llm/bin/llm -m {model} {sanitized_prompt}"
-
     # This Python code runs INSIDE the pod
     return f"""
+import urllib.request
+import json
 import base64
-import os
-import subprocess
-from kubernetes import client, config
 
 def run():
     try:
-        print("🔐 Fetching SSH secret via RBAC...")
-        config.load_incluster_config()
-        v1 = client.CoreV1Api()
+        host = "{host}"
+        port = {port}
         
-        secret = v1.read_namespaced_secret(name="{secret_name}", namespace="agent-execution")
-        key_data = base64.b64decode(secret.data["{key_field}"])
+        # 1. Fetch available models dynamically
+        tags_url = f"http://{{host}}:{{port}}/api/tags"
+        print(f"🔍 Fetching available models from {{tags_url}}...")
+        req = urllib.request.Request(tags_url)
+        with urllib.request.urlopen(req, timeout=10) as response:
+            tags_data = json.loads(response.read().decode('utf-8'))
+            models = [m['name'] for m in tags_data.get('models', [])]
+            
+        if not models:
+            print("❌ No models found on this node.")
+            return
+            
+        selected_model = models[0]
+        print(f"📦 Selected model: {{selected_model}}")
         
-        key_path = "/dev/shm/id_rsa"
-        with open(key_path, "wb") as f:
-            f.write(key_data)
-        os.chmod(key_path, 0o400)
+        # 2. Run inference
+        url = f"http://{{host}}:{{port}}/api/generate"
+        prompt_text = base64.b64decode("{encoded_prompt}").decode('utf-8')
+        payload = {{
+            "model": selected_model,
+            "prompt": prompt_text,
+            "stream": False
+        }}
         
-        print("🚀 Executing SSH inference on {device_name}...")
-        ssh_cmd = [
-            "ssh", "-i", key_path,
-            "-p", "{port}",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "LogLevel=ERROR",
-            "{user}@{host}",
-            "{remote_cmd}"
-        ]
+        data = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(url, data=data, headers={{'Content-Type': 'application/json'}})
         
-        result = subprocess.run(ssh_cmd, capture_output=True, text=True)
+        print(f"🚀 Executing HTTP inference on {device_name} (http://{{host}}:{{port}})...")
         
-        if result.returncode == 0:
+        with urllib.request.urlopen(req, timeout=600) as response:
+            result = json.loads(response.read().decode('utf-8'))
             print("\\n--- INFERENCE RESULT ---")
-            print(result.stdout)
+            print(result.get("response", ""))
             print("-------------------------")
-        else:
-            print(f"❌ SSH Failed (Code {{result.returncode}})")
-            print(result.stderr)
             
     except Exception as e:
         print(f"❌ Fatal Pod Error: {{e}}")
-    finally:
-        if os.path.exists("/dev/shm/id_rsa"):
-            os.remove("/dev/shm/id_rsa")
-            print("🧹 SSH Key wiped from RAM.")
 
 if __name__ == '__main__':
     run()
 """
 
 def deploy_agent_pod(device_name, prompt):
-    config.load_kube_config()
     v1 = client.CoreV1Api()
     
     job_id = f"agent-{device_name}-{uuid.uuid4().hex[:4]}"
@@ -109,7 +83,6 @@ def deploy_agent_pod(device_name, prompt):
     in_pod_python = generate_in_pod_script(device_name, prompt)
     encoded_python = base64.b64encode(in_pod_python.encode()).decode()
     
-    # Use the debug-agent:ssh image as it has 'ssh' and 'kubernetes' python lib installed
     pod_spec = client.V1Pod(
         metadata=client.V1ObjectMeta(name=job_id, labels={"app": "swarm-agent", "device": device_name}),
         spec=client.V1PodSpec(
@@ -118,10 +91,10 @@ def deploy_agent_pod(device_name, prompt):
             containers=[
                 client.V1Container(
                     name="agent",
-                    image="debug-agent:ssh", # Pre-baked with SSH and Kubernetes Python client
-                    command=["python3", "-c", f"import base64; exec(base64.b64decode('{encoded_python}'))"],
+                    image="python:3-alpine", # Using a standard lightweight python image
+                    command=["python3", "-u", "-c", f"import base64; exec(base64.b64decode('{encoded_python}'))"],
                     resources=client.V1ResourceRequirements(
-                        limits={"cpu": "500m", "memory": "512Mi"}
+                        limits={"cpu": "500m", "memory": "256Mi"}
                     )
                 )
             ]
@@ -151,8 +124,18 @@ def deploy_agent_pod(device_name, prompt):
         v1.delete_namespaced_pod(name=job_id, namespace=namespace)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Dynamic Agent Swarm Executor")
-    parser.add_argument("--device", required=True, choices=DEVICE_METADATA.keys(), help="Target mobile node")
+    # Initialize Kubernetes client first to discover devices dynamically
+    try:
+        config.load_kube_config()
+    except Exception as e:
+        print(f"❌ Failed to load Kubernetes config: {e}")
+        exit(1)
+        
+    available_devices = get_mobile_nodes()
+
+    parser = argparse.ArgumentParser(description="Dynamic Agent Swarm Executor (HTTP)")
+    # Restrict choices to the dynamically discovered devices if successful
+    parser.add_argument("--device", required=True, choices=available_devices if available_devices else None, help="Target mobile node service name in agent-execution namespace")
     parser.add_argument("--prompt", required=True, help="Prompt for the mobile model")
     
     args = parser.parse_args()
