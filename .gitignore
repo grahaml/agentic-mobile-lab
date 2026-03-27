@@ -17,7 +17,6 @@ Thumbs.db
 
 # Temporary files
 tmp/
-temp/
 *.log
 
 # Environment variables
