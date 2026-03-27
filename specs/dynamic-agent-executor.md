@@ -6,7 +6,7 @@ Create a Python-based utility that automates the deployment of a transient "Agen
 ## 🏗️ Architecture & Flow (Secure)
 The `swarm-agent.py` script will act as a control plane for individual task execution, prioritizing secret isolation:
 
-1.  **Device Resolution**: User specifies a device (e.g., `--device scout-s10e`).
+1.  **Device Resolution**: User specifies a device (e.g., `--device scout-sm-g970w`).
 2.  **Pod Generation**: A Pod manifest is generated with:
     *   **ServiceAccount**: A specialized `agent-executor-sa` with restricted RBAC.
     *   **No Volume Mounts**: No static secret references in the manifest.
@@ -31,8 +31,8 @@ To enable this, the following resources must be present in the `agent-execution`
 from kubernetes import client, config
 config.load_incluster_config()
 v1 = client.CoreV1Api()
-secret = v1.read_namespaced_secret(name="scout-s10e-ssh-key", namespace="agent-execution")
-key_data = secret.data["id_mobile_scout-s10e"]
+secret = v1.read_namespaced_secret(name="scout-sm-g970w-ssh-key", namespace="agent-execution")
+key_data = secret.data["id_mobile_scout-sm-g970w"]
 # Write to RAM-only storage
 with open("/dev/shm/id_rsa", "wb") as f:
     f.write(base64.b64decode(key_data))
@@ -46,7 +46,7 @@ os.chmod("/dev/shm/id_rsa", 0o400)
 ## 🚀 Usage Interface
 ```bash
 # Example: Run a prompt test on the S10e
-python3 swarm-agent.py --device scout-s10e --prompt "Hello from the sandbox!"
+python3 swarm-agent.py --device scout-sm-g970w --prompt "Hello from the sandbox!"
 
 # Example: Run a custom script on the Motorola
 python3 swarm-agent.py --device scout-motorolaedge2023 --file tests/audit-node.py

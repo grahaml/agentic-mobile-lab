@@ -9,14 +9,14 @@ from kubernetes import client, config, watch
 
 # --- Device Registry (Platform Capability) ---
 DEVICE_METADATA = {
-    "scout-s10e": {
+    "scout-sm-g970w": {
         "user": "u0_a293",
         "port": 8022,
-        "host": "scout-s10e.agent-execution.svc.cluster.local",
+        "host": "scout-sm-g970w.agent-execution.svc.cluster.local",
         "mode": "direct",
         "model": "mistral",
-        "secret": "scout-s10e-ssh-key",
-        "key_field": "id_mobile_scout-s10e"
+        "secret": "scout-sm-g970w-ssh-key",
+        "key_field": "id_mobile_scout-sm-g970w"
     },
     "scout-motorolaedge2023": {
         "user": "u0_a293",

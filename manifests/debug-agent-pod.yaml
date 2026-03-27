@@ -18,8 +18,8 @@ spec:
   volumes:
   - name: ssh-key
     secret:
-      secretName: scout-s10e-ssh-key
+      secretName: scout-sm-g970w-ssh-key
       defaultMode: 0400
       items:
-      - key: id_mobile_scout-s10e
+      - key: id_mobile_scout-sm-g970w
         path: id_rsa

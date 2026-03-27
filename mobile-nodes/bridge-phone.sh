@@ -14,7 +14,7 @@ NAMESPACE="agent-execution"
 SERVICE_ROLE=${2:-"scout"}
 DEVICE_ID=${3:-"unknown"}
 PERSONA_NAME="${SERVICE_ROLE}-${DEVICE_ID}"
-MANIFEST_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/../manifests"
+MANIFEST_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/local-manifests"
 MANIFEST_PATH="$MANIFEST_DIR/mobile-bridge-$PERSONA_NAME.yaml"
 
 # 1. Validation

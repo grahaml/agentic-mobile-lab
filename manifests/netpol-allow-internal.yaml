@@ -33,6 +33,8 @@ spec:
         cidr: 192.168.4.58/32
     - ipBlock:
         cidr: 192.168.4.50/32
+    - ipBlock:
+        cidr: 192.168.4.60/32
   # 3. Allow Traffic to pods in ollama-system namespace
   - to:
     - namespaceSelector:

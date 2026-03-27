@@ -18,7 +18,7 @@ Since the script uses cluster-internal DNS (`.svc.cluster.local`), it is best ru
 
 ```bash
 # Example using a sandbox pod
-python3 swarm-exec.py "python3 private-agent-runtime/tests/test-mobile-node-via-ssh.py --device scout-s10e --prompt 'Who are you?'"
+python3 swarm-exec.py "python3 private-agent-runtime/tests/test-mobile-node-via-ssh.py --device scout-sm-g970w --prompt 'Who are you?'"
 ```
 
 #### Running Locally (via Bridge or VPN)
@@ -27,14 +27,14 @@ If you have a direct connection to the mobile node's IP, you can override the me
 ```bash
 # Example using manual overrides for a local bridge
 python3 tests/test-mobile-node-via-ssh.py \
-  --device scout-s10e \
+  --device scout-sm-g970w \
   --user u0_a293 \
   --port 8022 \
   --prompt "Hello!"
 ```
 
 ### 📋 Available Devices
-- `scout-s10e`
+- `scout-sm-g970w`
 - `scout-motorolaedge2023`
 
 ---

@@ -16,10 +16,10 @@ import os
 # This serves as the initial "Platform Capability" [APP-003]
 # Prevents SSRF/Scanning by only allowing known service names.
 DEVICE_METADATA = {
-    "scout-s10e": {
+    "scout-sm-g970w": {
         "user": "u0_a293",
         "port": 8022,
-        "host": "scout-s10e.agent-execution.svc.cluster.local",
+        "host": "scout-sm-g970w.agent-execution.svc.cluster.local",
         "mode": "direct",
         "model": "qwen2.5:0.5b"
     },
@@ -110,7 +110,7 @@ def run_ssh_inference(device_name, prompt, user_override=None, port_override=Non
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Secure Mobile Node SSH Test Runner")
-    parser.add_argument("--device", required=True, help="Target device name (e.g., scout-s10e)")
+    parser.add_argument("--device", required=True, help="Target device name (e.g., scout-sm-g970w)")
     parser.add_argument("--prompt", required=True, help="Prompt to send to the model")
     parser.add_argument("--user", help="Override the SSH user")
     parser.add_argument("--port", type=int, help="Override the SSH port")
