@@ -1,0 +1,2 @@
+kubernetes==32.0.0
+# Add any other project-specific dependencies here
