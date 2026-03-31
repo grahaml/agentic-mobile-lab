@@ -2,92 +2,68 @@
 
 # ==========================================
 # Modernized Private Agent Runtime Setup
-# Focus: Security, Isolation, and Ubuntu 24.04 Compatibility
+# Focus: Persistence, High-Memory, and High-Context
 # ==========================================
 
-set -euo pipefail # Strict error handling: exit on error, unset vars, and pipe failures
+set -euo pipefail 
 
 # --- Configuration ---
+K3S_KUBECONFIG="$HOME/.kube/k3s-config" # Dedicated path for this cluster
+export KUBECONFIG="$K3S_KUBECONFIG"    # Force kubectl to use this file only
+
 NAMESPACE_AGENTS="agent-execution"
 NAMESPACE_OLLAMA="ollama-system"
-MODEL_NAME="mistral" 
+MODEL_NAME="qwen2.5-coder:7b" 
+OLLAMA_IMAGE="ollama/ollama:0.5.11" # Pinned to current stable version
 
-# Virtual Environments
-PROJECT_VENV="$HOME/.venv-private-agent-runtime"
-AIDER_VENV="$HOME/.venv-aider"
-
-echo "🚀 Starting Modernized Private Agent Runtime Installation..."
+echo "🚀 Starting Persistent Private Agent Runtime Installation..."
 
 # ==========================================
-# 1. Dependency & Capability Checks
+# 1. k3s Check & Isolated Config Sync
 # ==========================================
-echo "🔍 Checking system capabilities..."
-
-# Ensure python3-venv is present (Crucial for modern Ubuntu)
-if ! python3 -m venv --help > /dev/null 2>&1; then
-    echo "❌ Error: python3-venv is not installed."
-    echo "Please run: sudo apt update && sudo apt install python3-venv"
+if ! command -v k3s &> /dev/null; then
+    echo "❌ Error: k3s not found. Please install it once using: curl -sfL https://get.k3s.io | sh -"
     exit 1
 fi
 
-# Check for k3s / kubectl
-if ! command -v kubectl &> /dev/null; then
-    echo "❌ Error: kubectl not found."
-    exit 1
-fi
+# Sync the config to our dedicated, isolated file
+echo "🔑 Syncing isolated k3s access to $K3S_KUBECONFIG..."
+mkdir -p "$HOME/.kube"
+sudo cp /etc/rancher/k3s/k3s.yaml "$K3S_KUBECONFIG"
+sudo chown $(id -u):$(id -g) "$K3S_KUBECONFIG"
+chmod 600 "$K3S_KUBECONFIG"
 
-# Ensure k3s is using nftables if available (standard for Ubuntu 24.04)
-if iptables --version | grep -q "nf_tables"; then
-    echo "✅ nftables backend detected (Modern Ubuntu default)."
-fi
-
-# ==========================================
-# 2. Project Virtual Environment (Isolation)
-# ==========================================
-if [ ! -d "$PROJECT_VENV" ]; then
-    echo "📦 Creating project virtual environment at $PROJECT_VENV..."
-    python3 -m venv "$PROJECT_VENV"
-fi
-
-echo "📦 Updating project dependencies..."
-"$PROJECT_VENV/bin/pip" install --quiet -U pip
-if [ -f "requirements.txt" ]; then
-    "$PROJECT_VENV/bin/pip" install --quiet -r requirements.txt
-else
-    # Fallback if requirements.txt isn't in current dir
-    "$PROJECT_VENV/bin/pip" install --quiet kubernetes
-fi
+# Use standard kubectl (automatically points to $KUBECONFIG)
+KUBECMD="kubectl"
 
 # ==========================================
-# 3. Cluster Security Configuration
+# 2. Namespaces & Storage
 # ==========================================
-echo "🛡️  Hardening Kubernetes Namespaces & Policies..."
+echo "🛡️  Configuring Namespaces & Storage..."
+$KUBECMD create namespace "$NAMESPACE_OLLAMA" --dry-run=client -o yaml | $KUBECMD apply -f -
+$KUBECMD create namespace "$NAMESPACE_AGENTS" --dry-run=client -o yaml | $KUBECMD apply -f -
 
-# Create namespaces if they don't exist
-kubectl create namespace "$NAMESPACE_OLLAMA" --dry-run=client -o yaml | kubectl apply -f -
-kubectl create namespace "$NAMESPACE_AGENTS" --dry-run=client -o yaml | kubectl apply -f -
-
-# Apply Default-Deny Egress Policy to Agents
-kubectl apply -f - <<EOF
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+# Create a 20GB Persistent Volume Claim for models using k3s default local-path provisioner
+$KUBECMD apply -f - <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
 metadata:
-  name: default-deny-egress
-  namespace: $NAMESPACE_AGENTS
+  name: ollama-models-pvc
+  namespace: $NAMESPACE_OLLAMA
 spec:
-  podSelector: {}
-  policyTypes:
-  - Egress
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
 EOF
 
-echo "✅ Security policies applied."
-
 # ==========================================
-# 4. Deploy/Verify Ollama
+# 3. Deploy Ollama (Pinned Version, High-Memory + Persistent)
 # ==========================================
-echo "🧠 Deploying CPU-Optimized Ollama..."
+echo "🧠 Deploying Ollama ($OLLAMA_IMAGE) with 10Gi limit..."
 
-kubectl apply -f - <<EOF
+$KUBECMD apply -f - <<EOF
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -105,16 +81,23 @@ spec:
     spec:
       containers:
       - name: ollama
-        image: ollama/ollama:latest
+        image: $OLLAMA_IMAGE
         ports:
         - containerPort: 11434
         resources:
           requests:
             cpu: "1"
-            memory: "2Gi"
+            memory: "4Gi"
           limits:
             cpu: "2"
-            memory: "4Gi"
+            memory: "10Gi"
+        volumeMounts:
+        - name: model-storage
+          mountPath: /root/.ollama
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: ollama-models-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -131,17 +114,22 @@ spec:
       targetPort: 11434
 EOF
 
-echo "⏳ Waiting for Ollama (timeout 60s)..."
-kubectl rollout status deployment/ollama -n "$NAMESPACE_OLLAMA" --timeout=60s || echo "⚠️ Rollout taking longer than expected..."
+echo "⏳ Waiting for Ollama pod to be Ready..."
+$KUBECMD rollout status deployment/ollama -n "$NAMESPACE_OLLAMA" --timeout=120s
 
 # ==========================================
-# 🎉 Summary
+# 4. Pull and Create High-Context Preset
 # ==========================================
+echo "📥 Pulling $MODEL_NAME (this will only happen if not already in Volume)..."
+$KUBECMD exec -n "$NAMESPACE_OLLAMA" deploy/ollama -- ollama pull "$MODEL_NAME"
+
+echo "⚙️  Configuring high-context preset (qwen-large-ctx)..."
+$KUBECMD exec -n "$NAMESPACE_OLLAMA" deploy/ollama -- bash -c "echo 'FROM $MODEL_NAME
+PARAMETER num_ctx 32768' > Modelfile && ollama create qwen-large-ctx -f Modelfile"
+
 echo "=========================================="
-echo "✅ MODERNIZATION COMPLETE"
-echo "=========================================="
-echo "Project Venv: $PROJECT_VENV"
-echo ""
-echo "To run project tools (e.g., swarm-agent.py):"
-echo "  $PROJECT_VENV/bin/python3 swarm-agent.py --help"
+echo "✅ PERSISTENT SETUP COMPLETE"
+echo "Model: $MODEL_NAME (32k Context Preset Ready)"
+echo "Isolated Config: $K3S_KUBECONFIG"
+echo "Memory Limit: 10Gi"
 echo "=========================================="
