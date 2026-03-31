@@ -25,7 +25,26 @@
 - [ ] [APP-002] Finalize agentic harness (Aider vs. Claude Code vs. Custom Bash) | #critical
 - [ ] [NODE-004] Provision Samsung S8 (The Architect) as unrooted node | #high
 
-## 🏗️ In Progress
+### 🕸️ Nested MCP Architecture (The "Hub-and-Spoke") | [Spec](specs/nested-mcp-architecture.md)
+- [x] [MCP-MVW-001] Phase 1: Minimal Viable Workflow (MVW) | #critical | Completed 2026-03-26
+  - [x] Implement `run_mvw_security_scan` on Gateway FastMCP
+  - [x] Configure `sec_reviewer` role in Orchestrator for Mobile Node routing
+  - [x] Implement `grep_vulnerabilities` tool on Internal FastMCP
+  - [x] End-to-end validation with `Aider`/`OpenCode`
+- [ ] [MCP-GW-001] Implement Gateway FastMCP (SSE) | #med
+  - [ ] [MCP-GW-001-A] Expose high-level workflows as tools (e.g., `run_security_review`)
+  - [ ] [MCP-GW-001-B] Configure SSE for remote access from Local Machine
+- [ ] [MCP-ORCH-001] Develop FastAPI Orchestrator (The Brain) | #med
+  - [ ] [MCP-ORCH-001-A] Implement Router-Broker logic with tool-call interception
+  - [ ] [MCP-ORCH-001-B] State management for distributed workflows
+  - [ ] [MCP-ORCH-001-C] Role-based tool schema injection per node
+- [ ] [MCP-INT-001] Implement Internal FastMCP (Raw Tools) | #med
+  - [ ] [MCP-INT-001-A] Expose system tools (`read_db`, `grep_logs`, `execute_bash`)
+  - [ ] [MCP-INT-001-B] Enforce IP-based whitelist (Allow only Orchestrator)
+- [ ] [SWARM-001] Optimize Peripheral Swarm for Stateless Inference | #low
+  - [ ] [SWARM-001-A] Standardize Ollama API endpoints across mobile nodes
+  - [ ] [SWARM-001-B] Verify tool-calling capability on mobile Ollama instances
+
 ## 🏗️ In Progress
 - [ ] [APP-001] Setup Matrix on Essential PH-1 | #low
   - [x] [APP-001-A] Draft Matrix PH-1 Spec | [Spec](specs/matrix-ph1-spec.md)

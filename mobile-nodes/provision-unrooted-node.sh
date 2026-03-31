@@ -43,6 +43,9 @@ if ! adb shell "run-as $TERMUX_BOOT_PACKAGE ls >/dev/null 2>&1"; then
     echo "⚠️  WARNING: Termux:Boot not found. Automatic start on reboot will not work."
 fi
 
+# --- Battery Monitoring Setup ---
+adb shell "settings put global battery_tip_show_threshold 85" >/dev/null 2>&1 || true
+
 # --- Power Management & Stability (Cascading Hacks) ---
 echo "👻 Hardening background stability and Wi-Fi (Cascading)..."
 # 1. Phantom Process Killer (Android 12+)

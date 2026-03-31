@@ -1,0 +1,34 @@
+sequenceDiagram
+    box Local Machine
+        participant Aider as Aider/OpenCode
+    end
+    box k3s Cluster (Main Node)
+        participant Gateway as Gateway FastMCP (Exposes Workflows)
+        participant Router as FastAPI Orchestrator
+        participant InnerMCP as Internal FastMCP (Exposes Raw Tools)
+    end
+    box Peripheral Swarm
+        participant Mobile as Mobile Node (Ollama)
+    end
+
+    %% Step 1: You talk to your local client
+    Aider->>Gateway: Tool Call: run_cluster_security_review(my_code)
+
+    %% Step 2: Gateway triggers the internal swarm
+    Gateway->>Router: Initiate Workflow
+    Router->>Mobile: POST /api/chat (Task: Review, Tools: [read_db, grep_logs])
+
+    %% Step 3: Mobile node needs infrastructure context
+    Mobile-->>Router: Tool Call: read_db("CVE_list")
+
+    %% Step 4: Internal tool execution
+    Router->>InnerMCP: Execute read_db
+    InnerMCP-->>Router: Result: "No matches"
+
+    %% Step 5: Resolve the swarm loop
+    Router->>Mobile: POST /api/chat (Result: "No matches")
+    Mobile-->>Router: Final Verdict: "Code is clean."
+
+    %% Step 6: Return to your local machine
+    Router-->>Gateway: Workflow Complete
+    Gateway-->>Aider: Tool Result: "Code is clean."
