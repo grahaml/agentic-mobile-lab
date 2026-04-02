@@ -1,62 +1,99 @@
 #!/bin/bash
 
 # ==========================================
-# 🔋 Swarm Battery & Thermal Monitor
+# 🔋 Swarm Battery & Thermal Monitor v2.0
 # ==========================================
-# Scans all ADB-connected mobile nodes and 
-# reports health, temperature, and charging status.
+# Hybrid monitoring: Uses ADB (USB) or SSH (Network)
+# to report health and temperature for all nodes.
 # ==========================================
 
 echo "🔍 Scanning Swarm for Battery Health..."
 echo "--------------------------------------------------------------------------------"
-printf "%-20s | %-12s | %-8s | %-12s | %-10s\n" "Device ID" "Role" "Level" "Temp" "Health"
+printf "%-25s | %-8s | %-8s | %-12s | %-10s\n" "Device ID" "Source" "Level" "Temp" "Health"
 echo "--------------------------------------------------------------------------------"
 
-# Get list of devices (serial numbers)
-DEVICES=$(adb devices | grep "device$" | awk '{print $1}')
+# --- 1. Get Cluster Service List ---
+# This gives us the target names and expected IPs
+SVC_LIST=$(kubectl get svc -n agent-execution -l device-type=mobile -o jsonpath='{range .items[*]}{.metadata.name}{","}{.spec.clusterIP}{","}{.metadata.labels.device-id}{"\n"}{end}')
 
-if [ -z "$DEVICES" ]; then
-    echo "❌ No devices found via ADB."
-    exit 0
-fi
+# --- 2. Get ADB Serial List ---
+ADB_DEVICES=$(adb devices | grep "device$" | awk '{print $1}')
 
-for SERIAL in $DEVICES; do
-    # Get model and battery info
-    MODEL=$(adb -s "$SERIAL" shell getprop ro.product.model | tr -cd '[:alnum:]_-' | tr '[:upper:]' '[:lower:]')
+# Process each service in the cluster
+while IFS=',' read -r SVC_NAME CLUSTER_IP DEVICE_ID; do
+    [ -z "$SVC_NAME" ] && continue
     
-    # Extract battery details
-    BATT_INFO=$(adb -s "$SERIAL" shell dumpsys battery)
-    LEVEL=$(echo "$BATT_INFO" | grep "level:" | awk '{print $2}' | tr -d '\r')
-    TEMP_RAW=$(echo "$BATT_INFO" | grep "temperature:" | awk '{print $2}' | tr -d '\r')
-    HEALTH_CODE=$(echo "$BATT_INFO" | grep "health:" | awk '{print $2}' | tr -d '\r')
-
-    # Convert Temperature (Android reports in 10ths of a degree)
-    TEMP_C=$(echo "$TEMP_RAW / 10" | bc)
+    SOURCE="SSH"
+    DATA_FOUND=false
     
-    # Map Health Codes
-    case $HEALTH_CODE in
-        2) HEALTH="Good" ;;
-        3) HEALTH="Overheat" ;;
-        4) HEALTH="Dead" ;;
-        5) HEALTH="OverVolt" ;;
-        *) HEALTH="Unknown" ;;
-    esac
-
-    # Determine Role (Try to find a matching service in the cluster)
-    ROLE=$(kubectl get svc -n agent-execution -l "device-id=$MODEL" -o jsonpath='{.items[*].metadata.labels.agent-role}' 2>/dev/null || echo "scout")
-
-    # Colorize output based on temperature
-    # (Using basic ANSI codes for simplicity)
-    if [ "$TEMP_C" -gt 40 ]; then
-        TEMP_DISPLAY="${TEMP_C}°C 🔥"
-    elif [ "$TEMP_C" -gt 35 ]; then
-        TEMP_DISPLAY="${TEMP_C}°C ⚠️"
+    # Try ADB First if the device-id matches an ADB serial (simple heuristic)
+    for SERIAL in $ADB_DEVICES; do
+        ADB_MODEL=$(adb -s "$SERIAL" shell getprop ro.product.model | tr -cd '[:alnum:]_-' | tr '[:upper:]' '[:lower:]')
+        if [ "$ADB_MODEL" = "$DEVICE_ID" ] || [ "$SERIAL" = "$DEVICE_ID" ]; then
+            BATT_INFO=$(adb -s "$SERIAL" shell dumpsys battery)
+            LEVEL=$(echo "$BATT_INFO" | grep "level:" | awk '{print $2}' | tr -d '\r')
+            TEMP_RAW=$(echo "$BATT_INFO" | grep "temperature:" | awk '{print $2}' | tr -d '\r')
+            HEALTH_CODE=$(echo "$BATT_INFO" | grep "health:" | awk '{print $2}' | tr -d '\r')
+            TEMP_C=$(echo "$TEMP_RAW / 10" | bc)
+            
+            case $HEALTH_CODE in
+                2) HEALTH="Good" ;;
+                3) HEALTH="Overheat" ;;
+                4) HEALTH="Dead" ;;
+                *) HEALTH="Unknown" ;;
+            esac
+            
+            SOURCE="ADB"
+            DATA_FOUND=true
+            break
+        fi
+    done
+    
+    # If not found via ADB, try SSH to the Endpoint IP
+    if [ "$DATA_FOUND" = false ]; then
+        # Get the actual Endpoint IP (not cluster IP)
+        ENDPOINT_IP=$(kubectl get ep "$SVC_NAME" -n agent-execution -o jsonpath='{.subsets[0].addresses[0].ip}')
+        KEY="$HOME/.ssh/id_mobile_$SVC_NAME"
+        
+        if [ -n "$ENDPOINT_IP" ] && [ -f "$KEY" ]; then
+            # Attempt SSH poll
+            BATT_DATA=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -i "$KEY" -p 8022 "$ENDPOINT_IP" "cat /sys/class/power_supply/battery/capacity /sys/class/power_supply/battery/temp /sys/class/power_supply/battery/health" 2>/dev/null || true)
+            
+            if [ -n "$BATT_DATA" ]; then
+                LEVEL=$(echo "$BATT_DATA" | sed -n '1p')
+                TEMP_RAW=$(echo "$BATT_DATA" | sed -n '2p')
+                HEALTH_RAW=$(echo "$BATT_DATA" | sed -n '3p' | tr '[:upper:]' '[:lower:]')
+                
+                # Temp can be in 10ths (350) or degrees (35) depending on kernel
+                if [ "$TEMP_RAW" -gt 200 ]; then
+                    TEMP_C=$(echo "$TEMP_RAW / 10" | bc)
+                else
+                    TEMP_C=$TEMP_RAW
+                fi
+                
+                HEALTH=$(echo "$HEALTH_RAW" | sed 's/./\u&/')
+                DATA_FOUND=true
+            fi
+        fi
+    fi
+    
+    # Display Result
+    if [ "$DATA_FOUND" = true ]; then
+        # Colorize
+        if [ "$TEMP_C" -gt 40 ]; then
+            TEMP_DISPLAY="${TEMP_C}°C 🔥"
+        elif [ "$TEMP_C" -gt 35 ]; then
+            TEMP_DISPLAY="${TEMP_C}°C ⚠️"
+        else
+            TEMP_DISPLAY="${TEMP_C}°C ✅"
+        fi
+        
+        printf "%-25s | %-8s | %-8s | %-12s | %-10s\n" "$SVC_NAME" "$SOURCE" "$LEVEL%" "$TEMP_DISPLAY" "$HEALTH"
     else
-        TEMP_DISPLAY="${TEMP_C}°C ✅"
+        printf "%-25s | %-8s | %-8s | %-12s | %-10s\n" "$SVC_NAME" "OFFLINE" "-" "-" "-"
     fi
 
-    printf "%-20s | %-12s | %-8s | %-12s | %-10s\n" "$MODEL" "$ROLE" "$LEVEL%" "$TEMP_DISPLAY" "$HEALTH"
-done
+done <<< "$SVC_LIST"
 
 echo "--------------------------------------------------------------------------------"
 echo "💡 Tip: If temperature exceeds 40°C, consider reducing LLM load."

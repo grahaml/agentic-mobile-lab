@@ -63,6 +63,43 @@ adb shell dumpsys deviceidle whitelist +com.termux >/dev/null 2>&1 || true
 # 4. Screen Timeout Override (Optional/Fallback)
 adb shell settings put system screen_off_timeout 2147483647 >/dev/null 2>&1 || true
 
+# --- 5. Device-Specific Performance Tuning (Samsung) ---
+DEVICE_MODEL=$(adb shell getprop ro.product.model | tr -d '\r' | tr -cd '[:alnum:]_-' | tr '[:upper:]' '[:lower:]')
+
+if [[ "$DEVICE_MODEL" == *"samsung"* ]] || [[ "$DEVICE_MODEL" == *"sm-g"* ]]; then
+    echo "⚡ Samsung Galaxy Device detected. Applying Performance Profile..."
+    
+    echo "🧹 Stripping bloatware (Samsung)..."
+    PACKAGES=(
+        "com.samsung.android.bixby.wakeup"
+        "com.samsung.android.app.spage"
+        "com.samsung.android.app.routines"
+        "com.samsung.android.bixby.service"
+        "com.samsung.android.visionintelligence"
+        "com.samsung.android.bixby.agent"
+        "com.samsung.android.kidsinstaller"
+        "com.samsung.android.aremoji"
+        "com.samsung.android.arzone"
+        "com.samsung.android.game.gamehome"
+        "com.samsung.android.game.gametools"
+        "com.facebook.katana"
+        "com.facebook.system"
+        "com.facebook.appmanager"
+        "com.facebook.services"
+        "com.sec.android.easyMover.Agent"
+        "com.samsung.android.oneconnect"
+        "com.samsung.android.globalgoals"
+        "com.samsung.android.app.tips"
+    )
+
+    for pkg in "${PACKAGES[@]}"; do
+        if adb shell "pm list packages | grep -q $pkg"; then
+            echo "  - Removing: $pkg"
+            adb shell "pm uninstall -k --user 0 $pkg" >/dev/null 2>&1 || true
+        fi
+    done
+fi
+
 echo "💡 NOTE: Please manually verify 'Unrestricted' battery usage for Termux in Android Settings if disconnects persist."
 
 # Siphon hardware ID with strict sanitization or use provided override

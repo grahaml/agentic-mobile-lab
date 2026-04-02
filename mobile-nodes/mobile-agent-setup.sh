@@ -53,6 +53,7 @@ echo "🐍 Installing 'llm' and 'llm-ollama' (this may take 3-5 mins)..."
 echo "🧠 Registering Ollama models..."
 pkill ollama || true
 export OLLAMA_HOST=0.0.0.0
+export OLLAMA_MAX_LOADED_MODELS=1
 ollama serve > /dev/null 2>&1 &
 SLEEP_PID=$!
 sleep 5
@@ -71,6 +72,7 @@ pgrep sshd >/dev/null || sshd
 if ! pgrep ollama >/dev/null; then
     echo "Starting Ollama..."
     export OLLAMA_HOST=0.0.0.0
+    export OLLAMA_MAX_LOADED_MODELS=1
     ollama serve > "$HOME/ollama.log" 2>&1 &
     sleep 5
 fi

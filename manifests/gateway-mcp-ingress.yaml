@@ -1,0 +1,50 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    ingress.networking.k8s.io/class: higress
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"networking.k8s.io/v1","kind":"Ingress","metadata":{"annotations":{"ingress.networking.k8s.io/class":"higress"},"creationTimestamp":"2026-03-31T03:04:14Z","generation":2,"name":"gateway-mcp-ingress","namespace":"agent-execution","resourceVersion":"3305","uid":"b024cd37-5e08-4310-830e-c459ba1d00c1"},"spec":{"ingressClassName":"higress","rules":[{"http":{"paths":[{"backend":{"service":{"name":"gateway-mcp","port":{"number":8001}}},"path":"/sse","pathType":"Prefix"},{"backend":{"service":{"name":"gateway-mcp","port":{"number":8001}}},"path":"/messages","pathType":"Prefix"},{"backend":{"service":{"name":"gateway-mcp","port":{"number":8001}}},"path":"/tools","pathType":"Prefix"}]}}]},"status":{"loadBalancer":{"ingress":[{"ip":"192.168.4.65"}]}}}
+  creationTimestamp: "2026-03-31T03:04:14Z"
+  generation: 3
+  name: gateway-mcp-ingress
+  namespace: agent-execution
+  resourceVersion: "48968"
+  uid: b024cd37-5e08-4310-830e-c459ba1d00c1
+spec:
+  ingressClassName: higress
+  rules:
+  - http:
+      paths:
+      - backend:
+          service:
+            name: gateway-mcp
+            port:
+              number: 8001
+        path: /sse
+        pathType: Prefix
+      - backend:
+          service:
+            name: gateway-mcp
+            port:
+              number: 8001
+        path: /messages
+        pathType: Prefix
+      - backend:
+          service:
+            name: gateway-mcp
+            port:
+              number: 8001
+        path: /tools
+        pathType: Prefix
+      - backend:
+          service:
+            name: agent-orchestrator
+            port:
+              number: 8000
+        path: /workflow
+        pathType: Prefix
+status:
+  loadBalancer:
+    ingress:
+    - ip: 192.168.4.65

@@ -17,9 +17,10 @@ spec:
       - name: internal-mcp
         image: agent-framework:latest
         imagePullPolicy: Never # Using local build
-        command: ["mcp", "run", "internal_mcp.py", "--transport", "sse"]
+        command: ["uvicorn", "internal_mcp:app", "--host", "0.0.0.0", "--port", "8000"]
         ports:
         - containerPort: 8000
+
 ---
 apiVersion: v1
 kind: Service
@@ -92,7 +93,7 @@ spec:
       - name: gateway-mcp
         image: agent-framework:latest
         imagePullPolicy: Never
-        command: ["mcp", "run", "gateway_mcp.py", "--transport", "sse"]
+        command: ["uvicorn", "gateway_mcp:app", "--host", "0.0.0.0", "--port", "8000"]
         env:
         - name: ORCHESTRATOR_URL
           value: "http://agent-orchestrator:8000/workflow/security-scan"
@@ -142,3 +143,7 @@ spec:
     - namespaceSelector:
         matchLabels:
           kubernetes.io/metadata.name: ollama-system
+  # 4. Allow Egress to the mobile swarm nodes (External to cluster)
+  - to:
+    - ipBlock:
+        cidr: 192.168.4.63/32
