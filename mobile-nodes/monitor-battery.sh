@@ -56,14 +56,19 @@ while IFS=',' read -r SVC_NAME CLUSTER_IP DEVICE_ID; do
         KEY="$HOME/.ssh/id_mobile_$SVC_NAME"
         
         if [ -n "$ENDPOINT_IP" ] && [ -f "$KEY" ]; then
-            # Attempt SSH poll
-            BATT_DATA=$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=2 -i "$KEY" -p 8022 "$ENDPOINT_IP" "cat /sys/class/power_supply/battery/capacity /sys/class/power_supply/battery/temp /sys/class/power_supply/battery/health" 2>/dev/null || true)
+            # Attempt SSH poll - using -n to prevent consuming stdin
+            BATT_DATA=$(ssh -n -o StrictHostKeyChecking=no -o ConnectTimeout=2 -i "$KEY" -p 8022 "$ENDPOINT_IP" "cat /sys/class/power_supply/battery/capacity /sys/class/power_supply/battery/temp /sys/class/power_supply/battery/health" 2>/dev/null || true)
             
             if [ -n "$BATT_DATA" ]; then
                 LEVEL=$(echo "$BATT_DATA" | sed -n '1p')
                 TEMP_RAW=$(echo "$BATT_DATA" | sed -n '2p')
                 HEALTH_RAW=$(echo "$BATT_DATA" | sed -n '3p' | tr '[:upper:]' '[:lower:]')
                 
+                # Handle cases where some files might be missing
+                [ -z "$LEVEL" ] && LEVEL="?"
+                [ -z "$TEMP_RAW" ] && TEMP_RAW="0"
+                [ -z "$HEALTH_RAW" ] && HEALTH_RAW="unknown"
+
                 # Temp can be in 10ths (350) or degrees (35) depending on kernel
                 if [ "$TEMP_RAW" -gt 200 ]; then
                     TEMP_C=$(echo "$TEMP_RAW / 10" | bc)
@@ -93,7 +98,9 @@ while IFS=',' read -r SVC_NAME CLUSTER_IP DEVICE_ID; do
         printf "%-25s | %-8s | %-8s | %-12s | %-10s\n" "$SVC_NAME" "OFFLINE" "-" "-" "-"
     fi
 
-done <<< "$SVC_LIST"
+done <<EOF
+$SVC_LIST
+EOF
 
 echo "--------------------------------------------------------------------------------"
 echo "💡 Tip: If temperature exceeds 40°C, consider reducing LLM load."
