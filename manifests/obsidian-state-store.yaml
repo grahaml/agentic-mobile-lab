@@ -1,0 +1,154 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: obsidian-vault-pv
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/home/grahaml/SideProjects/swarm-vault"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: obsidian-vault-pvc
+  namespace: agent-execution
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  volumeName: obsidian-vault-pv
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+  namespace: agent-execution
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitea
+  template:
+    metadata:
+      labels:
+        app: gitea
+    spec:
+      containers:
+      - name: gitea
+        image: gitea/gitea:latest
+        env:
+        - name: USER_UID
+          value: "1000"
+        - name: USER_GID
+          value: "1000"
+        ports:
+        - containerPort: 3000
+          name: http
+        - containerPort: 22
+          name: ssh
+        volumeMounts:
+        - name: gitea-data
+          mountPath: /data
+      volumes:
+      - name: gitea-data
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea
+  namespace: agent-execution
+spec:
+  selector:
+    app: gitea
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+  - name: ssh
+    port: 22
+    targetPort: 22
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: syncthing-core
+  namespace: agent-execution
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: syncthing
+  template:
+    metadata:
+      labels:
+        app: syncthing
+    spec:
+      containers:
+      - name: syncthing
+        image: syncthing/syncthing:latest
+        env:
+        - name: PUID
+          value: "1000"
+        - name: PGID
+          value: "1000"
+        ports:
+        - containerPort: 8384 # GUI
+        - containerPort: 22000 # Sync protocol
+        - containerPort: 21027 # Discovery (UDP)
+          protocol: UDP
+        volumeMounts:
+        - name: obsidian-vault
+          mountPath: /var/syncthing
+      - name: git-tracker
+        image: alpine/git:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Headless Git tracker to commit vault state
+          git config --global user.email "bot@swarm.local"
+          git config --global user.name "Swarm Tracker"
+          git config --global init.defaultBranch main
+          cd /var/syncthing
+          if [ ! -d ".git" ]; then
+            git init
+            git remote add origin http://gitea:3000/swarm/vault.git || true
+          fi
+          while true; do
+            git add .
+            git commit -m "Auto-sync: $(date)" || true
+            # For the first push or updates
+            git push -u origin main || true
+            sleep 300
+          done
+        volumeMounts:
+        - name: obsidian-vault
+          mountPath: /var/syncthing
+      volumes:
+      - name: obsidian-vault
+        persistentVolumeClaim:
+          claimName: obsidian-vault-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: syncthing
+  namespace: agent-execution
+spec:
+  selector:
+    app: syncthing
+  ports:
+  - name: gui
+    port: 8384
+    targetPort: 8384
+  - name: sync
+    port: 22000
+    targetPort: 22000

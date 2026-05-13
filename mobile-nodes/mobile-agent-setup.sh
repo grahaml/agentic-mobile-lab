@@ -26,7 +26,7 @@ echo "📦 Updating Termux and installing build tools..."
 pkg update -y && pkg upgrade -y || (pkg update -y && pkg upgrade -y -f)
 # Install all required native tools
 pkg install root-repo -y || true
-pkg install ollama python git openssh gh rust binutils build-essential clang tmux btop viddy -y || (apt update && apt install -y ollama python git openssh gh rust binutils build-essential clang tmux btop viddy)
+pkg install ollama python git openssh gh rust binutils build-essential clang tmux btop viddy syncthing -y || (apt update && apt install -y ollama python git openssh gh rust binutils build-essential clang tmux btop viddy syncthing)
 
 # Prevent CPU sleep
 echo "🛡️  Acquiring Termux CPU Wake Lock..."
@@ -77,6 +77,12 @@ if ! pgrep ollama >/dev/null; then
     sleep 5
 fi
 
+# Ensure Syncthing is running
+if ! pgrep syncthing >/dev/null; then
+    echo "Starting Syncthing..."
+    syncthing --no-browser > "$HOME/syncthing.log" 2>&1 &
+fi
+
 # Start a new detached tmux session
 tmux has-session -t agent-dashboard 2>/dev/null
 if [ $? != 0 ]; then
@@ -89,7 +95,7 @@ if [ $? != 0 ]; then
     tmux split-window -v -p 30 -t agent-dashboard:0.0
 
     # Bottom pane (1): Active Inference Monitor
-    tmux send-keys -t agent-dashboard:0.1 "viddy -n 2 'ollama ps'" C-m
+    tmux send-keys -t agent-dashboard:0.1 "viddy -n 2 'ollama ps && syncthing device id'" C-m
 fi
 
 # Attach to session

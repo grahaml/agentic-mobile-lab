@@ -61,6 +61,20 @@ spec:
           value: "http://ollama-service.ollama-system.svc.cluster.local:11434/api/chat"
         ports:
         - containerPort: 8000
+        volumeMounts:
+        - name: obsidian-vault
+          mountPath: /vault
+      - name: watchdog
+        image: agent-framework:latest
+        imagePullPolicy: Never
+        command: ["python", "watchdog.py"]
+        volumeMounts:
+        - name: obsidian-vault
+          mountPath: /vault
+      volumes:
+      - name: obsidian-vault
+        persistentVolumeClaim:
+          claimName: obsidian-vault-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -146,4 +160,4 @@ spec:
   # 4. Allow Egress to the mobile swarm nodes (External to cluster)
   - to:
     - ipBlock:
-        cidr: 192.168.4.63/32
+        cidr: 192.168.4.0/22

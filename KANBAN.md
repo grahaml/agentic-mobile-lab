@@ -35,7 +35,25 @@
 
 ---
 
+## 🧠 Obsidian State Store & Queuing (NEXT FOCUS)
+### [ARCH-004] Storage, Protocol & Pipelines
+- [ ] [ARCH-004-A] Provision k3s PV for Vault, Deploy in-cluster Gitea & Headless Git Tracker
+- [ ] [ARCH-004-B] Deploy Syncthing Core & update `provision-*.sh` scripts to install/pair Syncthing securely
+- [ ] [ARCH-004-C] Update `orchestrator.py` to use UUID-based Markdown task assignment
+- [ ] [ARCH-004-D] Update `swarm-agent.py` (Nonce claims, `.result.md` generation, Env Hashing)
+- [ ] [ARCH-004-E] Implement Watchdog Loop (`swarm-health.md`, Dead-letter, Conflicts)
+- [ ] [ARCH-004-F] Implement AutoDream Nightly Consolidation Pipeline
+
+---
+
 ## 🏗️ In Progress
+- [/] [TEST-005] Full Mobile Fleet "Banana" Audit | #high
+  - [x] [architect-sm-g986w] SUCCESS (S20+ responds correctly)
+  - [ ] [architect-sm-g950w] OFFLINE (S8 connection refused)
+  - [ ] [scout-sm-g781w] OFFLINE (S20 FE connection refused)
+  - [ ] [scout-sm-g970w] OFFLINE (S10e connection refused)
+  - [ ] [matrix-host-ph-1] OFFLINE (PH-1 connection refused)
+  - [ ] [scout-motorolaedge2023] OFFLINE (Motorola connection refused)
 - [/] [NODE-003] Implement Observability V2 (gotop + ollama ps) across fleet | #high
   - [x] [NODE-003-A] Draft Provisioning V2 Spec | [Spec](specs/provisioning-v2-integration.md)
   - [x] [NODE-003-B] Update `mobile-agent-setup.sh` (Unrooted)
@@ -43,6 +61,14 @@
   - [x] [NODE-003-D] Update `provision-lineage-node.sh`
   - [ ] [NODE-003-E] Deploy Dashboard V2 to Samsung S10e
   - [/] [NODE-003-F] Deploy Dashboard V2 to Motorola Edge (Chroot-aware)
+- [/] [NODE-005] Nexus 7 (The Guardian) - Physical Interface | #high
+  - [x] [NODE-005-A] Draft `provision-guardian.sh` (Termux + SSH + TUI) | Completed 2026-04-02
+  - [x] [NODE-005-B] Design `start-guardian.sh`: `gomuks` + `monitor-battery.sh` + K8s logs | Completed 2026-04-02
+  - [ ] [NODE-005-C] Execute provisioning on physical Nexus 7
+- [x] [COMM-001] Secure Agent Communications Layer (Macbuntu Backend) | #high | Completed 2026-04-02
+  - [x] [COMM-001-A] Deploy Synapse (Matrix Server) on Macbuntu via Docker Compose
+  - [x] [COMM-001-B] Build `matrix-orchestrator-bot.py` & Deploy as container
+  - [x] [COMM-001-C] Implement "Guardian Watch" Heartbeat alerting in Bot
 
 ---
 
