@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: matrix-swarm-bot
+  namespace: agent-execution
+  labels:
+    app: matrix-swarm-bot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: matrix-swarm-bot
+  template:
+    metadata:
+      labels:
+        app: matrix-swarm-bot
+    spec:
+      containers:
+      - name: bot
+        image: python:3.12-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            apt-get update && apt-get install -y iputils-ping &&
+            pip install -r /app/requirements.txt &&
+            python -u /app/matrix-orchestrator-bot.py
+        env:
+        - name: MATRIX_HOMESERVER
+          value: "http://matrix-host-service:8008"
+        - name: ORCHESTRATOR_URL
+          value: "http://agent-orchestrator:8000"
+        - name: MATRIX_USER_ID
+          value: "@swarm-bot:macbuntu.local"
+        - name: MATRIX_PASSWORD
+          value: "swarm_secret_2026"
+        - name: MATRIX_ROOM_ALIAS
+          value: "#war-room:macbuntu.local"
+        securityContext:
+          capabilities:
+            add: ["NET_RAW"]
+        volumeMounts:
+        - name: script
+          mountPath: /app/matrix-orchestrator-bot.py
+          subPath: matrix-orchestrator-bot.py
+        - name: requirements
+          mountPath: /app/requirements.txt
+          subPath: requirements.txt
+      volumes:
+      - name: script
+        configMap:
+          name: matrix-bot-script
+      - name: requirements
+        configMap:
+          name: matrix-bot-requirements

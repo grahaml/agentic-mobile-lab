@@ -1,0 +1,8 @@
+kind: Service
+apiVersion: v1
+metadata:
+  name: matrix-host-service
+  namespace: agent-execution
+spec:
+  type: ExternalName
+  externalName: macbuntu.local
