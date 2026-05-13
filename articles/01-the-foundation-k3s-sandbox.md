@@ -51,3 +51,5 @@ The project successfully delivered a reproducible, one-shot installation script 
 We had the brain, and we had the sandbox. But while the primary cluster handled the heavy lifting, we realized we needed horizontal scaling to simulate real multi-agent team dynamics. 
 
 Looking at a drawer full of old Android phones, a "holy shit" moment occurred: *Could we repurpose these forgotten devices as fully autonomous cluster nodes?*
+
+In [Part 2](./02-the-realization-mobile-agents.md), we explore the mobile bridge, and in [Part 4](./04-the-bridge-tailscale-networking.md), we finalize the network security that makes this all possible.
