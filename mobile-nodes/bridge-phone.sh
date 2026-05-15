@@ -11,16 +11,18 @@ set -e
 
 # Configuration
 NAMESPACE="agent-execution"
-SERVICE_ROLE=${2:-"scout"}
+# The 'Shortname' or Role (e.g., s20, moto, scout)
+SVC_NAME=${2:-"scout"}
 DEVICE_ID=${3:-"unknown"}
-PERSONA_NAME="${SERVICE_ROLE}-${DEVICE_ID}"
+# Use the shortname for the K8s service to match the SSH config
+PERSONA_NAME="$SVC_NAME"
 MANIFEST_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/local-manifests"
 MANIFEST_PATH="$MANIFEST_DIR/mobile-bridge-$PERSONA_NAME.yaml"
 
 # 1. Validation
 if [ -z "$1" ]; then
-    echo "❌ Usage: ./bridge-phone.sh <PHONE_IP> [SERVICE_ROLE] [DEVICE_ID]"
-    echo "Example: ./bridge-phone.sh 192.168.4.50 matrix-host ph-1"
+    echo "❌ Usage: ./bridge-phone.sh <PHONE_IP> [SVC_NAME] [DEVICE_ID]"
+    echo "Example: ./bridge-phone.sh 10.0.0.20 s20 sm-g986w"
     exit 1
 fi
 
@@ -37,7 +39,7 @@ metadata:
   name: $PERSONA_NAME
   namespace: $NAMESPACE
   labels:
-    agent-role: $SERVICE_ROLE
+    agent-role: $SVC_NAME
     device-id: $DEVICE_ID
     device-type: mobile
 spec:
@@ -66,6 +68,9 @@ EOF
 
 # 3. Apply to Cluster
 SECRET_NAME="${PERSONA_NAME}-ssh-key"
+# Fix: Force KUBECONFIG for k3s
+export KUBECONFIG="$HOME/.kube/k3s-config"
+
 if ! kubectl get secret "$SECRET_NAME" -n "$NAMESPACE" >/dev/null 2>&1; then
     echo "🔑 Creating Kubernetes Secret for $PERSONA_NAME..."
     kubectl create secret generic "$SECRET_NAME" \

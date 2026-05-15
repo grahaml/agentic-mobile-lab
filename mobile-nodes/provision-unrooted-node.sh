@@ -14,9 +14,21 @@ set -e
 SERVICE_ROLE=$(echo "${1:-scout}" | tr -cd '[:alnum:]_-')
 TERMUX_PACKAGE="com.termux"
 # --- 2. Connectivity & Environment Check ---
-if ! adb devices | grep -q "device$"; then
-    echo "❌ ERROR: No device found via ADB."
-    exit 1
+# Detect serial if not provided
+if [ -z "${ANDROID_SERIAL:-}" ]; then
+    DEVICE_COUNT=$(adb devices | grep "device$" | wc -l)
+    if [ "$DEVICE_COUNT" -eq 1 ]; then
+        ANDROID_SERIAL=$(adb devices | grep "device$" | awk '{print $1}')
+        export ANDROID_SERIAL
+        echo "📱 Detected device: $ANDROID_SERIAL"
+    elif [ "$DEVICE_COUNT" -gt 1 ]; then
+        echo "❌ ERROR: Multiple devices found. Please set ANDROID_SERIAL."
+        adb devices
+        exit 1
+    else
+        echo "❌ ERROR: No device found via ADB."
+        exit 1
+    fi
 fi
 
 # 2b. Prerequisites Check (Manual Installation Required)
@@ -134,16 +146,37 @@ echo "👤 Termux User identified as: $TERMUX_USER"
 # --- 3. Secure Payload Delivery (Robust & Idempotent) ---
 echo "📥 Delivering payloads via secure bridge..."
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-DEVICE_KEY="$HOME/.ssh/id_mobile_$PERSONA_NAME"
+# Use shortname for the key
+DEVICE_KEY="$HOME/.ssh/id_mobile_$SERVICE_ROLE"
 
 # Generate SSH Key on Host if missing
 if [ ! -f "$DEVICE_KEY" ]; then
-    ssh-keygen -t ed25519 -f "$DEVICE_KEY" -N "" -C "agent-lab@$PERSONA_NAME"
+    echo "🔑 Generating new SSH key for $SERVICE_ROLE..."
+    ssh-keygen -t ed25519 -f "$DEVICE_KEY" -N "" -C "grahaml@$SERVICE_ROLE"
+fi
+
+# Update ~/.ssh/config for easy access
+SSH_CONFIG="$HOME/.ssh/config"
+if ! grep -q "Host $SERVICE_ROLE" "$SSH_CONFIG" 2>/dev/null; then
+    echo "📝 Adding $SERVICE_ROLE to $SSH_CONFIG..."
+    cat <<EOF >> "$SSH_CONFIG"
+
+Host $SERVICE_ROLE
+    HostName $PHONE_IP
+    User grahaml
+    Port 8022
+    IdentityFile $DEVICE_KEY
+    StrictHostKeyChecking no
+EOF
+else
+    # Update the IP if it changed
+    echo "📝 Updating IP for $SERVICE_ROLE in $SSH_CONFIG..."
+    sed -i "/Host $SERVICE_ROLE/,/HostName/ s/HostName .*/HostName $PHONE_IP/" "$SSH_CONFIG"
 fi
 
 # Push files to a neutral location
-adb push "$DIR/mobile-agent-setup.sh" /data/local/tmp/setup.sh
-adb push "${DEVICE_KEY}.pub" /data/local/tmp/mobile_key.pub
+adb -s $ANDROID_SERIAL push "$DIR/mobile-agent-setup.sh" /sdcard/setup.sh
+adb -s $ANDROID_SERIAL push "${DEVICE_KEY}.pub" /sdcard/mobile_key.pub
 
 # Inject identity and scripts into Termux scope
 echo "🔑 Finalizing identity and starting services..."
@@ -169,30 +202,17 @@ else
     T_HOME="/data/data/com.termux/files/home"
     
     # Clear line and send commands
-    adb shell input keyevent 66 # Enter to clear prompt
+    adb -s $ANDROID_SERIAL shell input keyevent 66 # Enter to clear prompt
     
-    echo "  - Navigating to home and preparing .ssh..."
-    adb shell "input text \"cd $T_HOME\"" && adb shell input keyevent 66
-    adb shell 'input text "mkdir"' && adb shell input keyevent 62 && adb shell 'input text "-p"' && adb shell input keyevent 62 && adb shell 'input text ".ssh"' && adb shell input keyevent 66
-    sleep 1
+    echo "  - Injecting SSH key and setup script (One-Liner)..."
+    # We use a single input text command to avoid race conditions with the UI
+    SETUP_CMD="mkdir -p ~/.ssh && cat /sdcard/mobile_key.pub >> ~/.ssh/authorized_keys && chmod 700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys && cat /sdcard/setup.sh > ~/setup.sh && chmod +x ~/setup.sh && pkill sshd && sshd"
     
-    echo "  - Importing public key from /sdcard..."
-    # Note: We use absolute path for /sdcard source
-    adb shell 'input text "cat"' && adb shell input keyevent 62 && adb shell 'input text "/sdcard/mobile_key.pub"' && adb shell input keyevent 62 && adb shell 'input text ">"' && adb shell input keyevent 62 && adb shell 'input text ".ssh/authorized_keys"' && adb shell input keyevent 66
-    sleep 1
+    # Use 'input text' with escaped spaces or just quotes
+    adb -s $ANDROID_SERIAL shell "input text \"$SETUP_CMD\""
+    adb -s $ANDROID_SERIAL shell input keyevent 66 # Execute
     
-    echo "  - Setting permissions..."
-    adb shell 'input text "chmod"' && adb shell input keyevent 62 && adb shell 'input text "700"' && adb shell input keyevent 62 && adb shell 'input text ".ssh"' && adb shell input keyevent 66
-    adb shell 'input text "chmod"' && adb shell input keyevent 62 && adb shell 'input text "600"' && adb shell input keyevent 62 && adb shell 'input text ".ssh/authorized_keys"' && adb shell input keyevent 66
-    
-    echo "  - Importing setup script..."
-    adb shell 'input text "cat"' && adb shell input keyevent 62 && adb shell 'input text "/sdcard/setup.sh"' && adb shell input keyevent 62 && adb shell 'input text ">"' && adb shell input keyevent 62 && adb shell 'input text "setup.sh"' && adb shell input keyevent 66
-    adb shell 'input text "chmod"' && adb shell input keyevent 62 && adb shell 'input text "+x"' && adb shell input keyevent 62 && adb shell 'input text "setup.sh"' && adb shell input keyevent 66
-    
-    echo "  - Restarting SSH daemon..."
-    adb shell 'input text "pkill"' && adb shell input keyevent 62 && adb shell 'input text "-f"' && adb shell input keyevent 62 && adb shell 'input text "sshd"' && adb shell input keyevent 66
-    sleep 1
-    adb shell 'input text "sshd"' && adb shell input keyevent 66
+    echo "  - Waiting for SSHD to restart..."
     sleep 5
 fi
 

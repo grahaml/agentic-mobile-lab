@@ -36,6 +36,8 @@ From the `mobile-nodes` directory on your Macbuntu host, run:
 | :--- | :--- | :--- |
 | `provision-mobile-node.sh` | Macbuntu | One-shot setup for new rooted devices. |
 | `bridge-phone.sh` | Macbuntu | Registers a phone IP into the K8s cluster DNS. (Generates Git-ignored manifests in `./local-manifests/`) |
+| `set-mobile-model.sh` | Macbuntu | Swaps the active LLM on a bridged node and updates its dispatcher. |
+| `query-mobile-node.sh` | Macbuntu | Quickly test inference on a specific node with a simple CLI query. |
 | `enter-lab.sh` | Phone (`~/`) | Hardened dispatcher for incoming SSH tasks. |
 | `auditor-test-pod.yaml` | Macbuntu | Example manifest for a cluster-to-phone audit. |
 
@@ -53,6 +55,22 @@ cat my_code.py | ssh -p 8022 u0_a386@<PHONE_IP> "sudo ~/enter_lab.sh audit"
 
 ### From within the Kubernetes Cluster:
 Deploy a pod that mounts the `mobile-scout-ssh-key` secret and uses `hostNetwork: true` to reach the phone's LAN IP. See `auditor-test-pod.yaml` for a complete example.
+
+## 🔄 Swapping Models
+To quickly install and switch to a different model on a bridged node:
+```bash
+./scripts/set-mobile-model.sh --node <SVC_NAME> --model <MODEL_NAME>
+```
+This will:
+1.  Pull the model to the phone via the host's Ollama CLI.
+2.  Update the `enter-lab.sh` dispatcher on the phone (if it exists) to use the new model for audits.
+
+## 💬 Testing Inference
+You can quickly verify that a node is working and the model is loaded using the query tool:
+```bash
+./scripts/query-mobile-node.sh --node s20 --query "Hello!"
+```
+Add `--model <NAME>` to target a specific model if multiple are installed.
 
 ## 🛡️ Security Features
 *   **Command Allow-listing**: `enter_lab.sh` only allows specific actions (`audit`, `status`, `update`) to prevent command injection.
