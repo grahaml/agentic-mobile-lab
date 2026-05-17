@@ -1,0 +1,411 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hermes-taran
+  namespace: hermes-sandbox
+spec:
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: api
+    port: 8642
+    protocol: TCP
+    targetPort: 8642
+  selector:
+    app: hermes-taran
+  sessionAffinity: None
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: persona-broker
+  namespace: hermes-sandbox
+spec:
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: mcp
+    port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    app: persona-broker
+  sessionAffinity: None
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: hermes
+  name: hermes-agent
+  namespace: hermes-sandbox
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: hermes
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: hermes
+    spec:
+      containers:
+      - envFrom:
+        - secretRef:
+            name: hermes-secrets
+        image: hermes-agent:local
+        imagePullPolicy: IfNotPresent
+        name: hermes
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /root/.hermes
+          name: data
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: hermes-data-pvc
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: hermes-programmer
+  name: hermes-programmer
+  namespace: hermes-sandbox
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: hermes-programmer
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: hermes-programmer
+    spec:
+      containers:
+      - envFrom:
+        - secretRef:
+            name: hermes-programmer-secrets
+        image: hermes-agent:local
+        imagePullPolicy: IfNotPresent
+        name: hermes
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /root/.hermes
+          name: data
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: hermes-programmer-pvc
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: hermes-taran
+    hermes-role: specialist
+  name: hermes-taran
+  namespace: hermes-sandbox
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: hermes-taran
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: hermes-taran
+        hermes-role: specialist
+    spec:
+      containers:
+      - envFrom:
+        - secretRef:
+            name: hermes-specialist-secrets
+        image: hermes-agent:local
+        imagePullPolicy: IfNotPresent
+        name: hermes
+        ports:
+        - containerPort: 8642
+          name: api
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /root/.hermes
+          name: data
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: hermes-taran-pvc
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: persona-broker
+  name: persona-broker
+  namespace: hermes-sandbox
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: persona-broker
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: persona-broker
+    spec:
+      containers:
+      - env:
+        - name: TECH_LEAD_URL
+          value: http://hermes-taran:8642
+        image: persona-broker:local
+        imagePullPolicy: IfNotPresent
+        name: broker
+        ports:
+        - containerPort: 8080
+          name: mcp
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    pv.kubernetes.io/bind-completed: 'yes'
+    pv.kubernetes.io/bound-by-controller: 'yes'
+    volume.beta.kubernetes.io/storage-provisioner: rancher.io/local-path
+    volume.kubernetes.io/selected-node: graham-macbuntu
+    volume.kubernetes.io/storage-provisioner: rancher.io/local-path
+  finalizers:
+  - kubernetes.io/pvc-protection
+  name: hermes-data-pvc
+  namespace: hermes-sandbox
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+  volumeMode: Filesystem
+  volumeName: pvc-7d7d3256-ff76-4abd-990e-635fbe60726a
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    pv.kubernetes.io/bind-completed: 'yes'
+    pv.kubernetes.io/bound-by-controller: 'yes'
+    volume.beta.kubernetes.io/storage-provisioner: rancher.io/local-path
+    volume.kubernetes.io/selected-node: graham-macbuntu
+    volume.kubernetes.io/storage-provisioner: rancher.io/local-path
+  finalizers:
+  - kubernetes.io/pvc-protection
+  name: hermes-programmer-pvc
+  namespace: hermes-sandbox
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+  volumeMode: Filesystem
+  volumeName: pvc-614e86ad-5aee-4da4-bfef-ef6abffcaf66
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  annotations:
+    pv.kubernetes.io/bind-completed: 'yes'
+    pv.kubernetes.io/bound-by-controller: 'yes'
+    volume.beta.kubernetes.io/storage-provisioner: rancher.io/local-path
+    volume.kubernetes.io/selected-node: graham-macbuntu
+    volume.kubernetes.io/storage-provisioner: rancher.io/local-path
+  finalizers:
+  - kubernetes.io/pvc-protection
+  name: hermes-taran-pvc
+  namespace: hermes-sandbox
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+  volumeMode: Filesystem
+  volumeName: pvc-41d9cec2-a90a-4e14-8fea-e8be0815d71e
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: hermes-sandbox-egress
+  namespace: hermes-sandbox
+spec:
+  egress:
+  - ports:
+    - port: 53
+      protocol: UDP
+    - port: 53
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+  - ports:
+    - port: 80
+      protocol: TCP
+    - port: 443
+      protocol: TCP
+    to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+  - ports:
+    - port: 11434
+      protocol: TCP
+    to:
+    - namespaceSelector:
+        matchLabels:
+          name: ollama-system
+  - ports:
+    - port: 8642
+      protocol: TCP
+    - port: 8080
+      protocol: TCP
+    to:
+    - podSelector: {}
+  ingress:
+  - from:
+    - podSelector: {}
+    ports:
+    - port: 8642
+      protocol: TCP
+    - port: 8080
+      protocol: TCP
+  podSelector: {}
+  policyTypes:
+  - Egress
+  - Ingress
+
+---
+apiVersion: v1
+data:
+  ca.crt: '-----BEGIN CERTIFICATE-----
+
+    MIIBdzCCAR2gAwIBAgIBADAKBggqhkjOPQQDAjAjMSEwHwYDVQQDDBhrM3Mtc2Vy
+
+    dmVyLWNhQDE3Nzc0Mjk5MTcwHhcNMjYwNDI5MDEzMTU3WhcNMzYwNDI2MDEzMTU3
+
+    WjAjMSEwHwYDVQQDDBhrM3Mtc2VydmVyLWNhQDE3Nzc0Mjk5MTcwWTATBgcqhkjO
+
+    PQIBBggqhkjOPQMBBwNCAAQmdBRQ80GFePJ/u73noaXvbf0HEQ9/1BkN7OTPvQ9v
+
+    //Axl9S1hAX4dCO0JTKhVEv0ErGCEfeNG8MMhxcNKdmao0IwQDAOBgNVHQ8BAf8E
+
+    BAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUi9YxE6Z9T5naXtJ0fnln
+
+    zlCfCUMwCgYIKoZIzj0EAwIDSAAwRQIgHCTbhqqrvjH1Jl1ISAuQPs+EOJK4pijj
+
+    yUMp4/byqQoCIQC4tNGK8bHlSQdhu0DgUFsbH3y3VhtUwTQCSaP1klcyLQ==
+
+    -----END CERTIFICATE-----
+
+    '
+kind: ConfigMap
+metadata:
+  annotations:
+    kubernetes.io/description: Contains a CA bundle that can be used to verify the
+      kube-apiserver when using internal endpoints such as the internal service IP
+      or kubernetes.default.svc. No other usage is guaranteed across distributions
+      of Kubernetes clusters.
+  name: kube-root-ca.crt
+  namespace: hermes-sandbox
+

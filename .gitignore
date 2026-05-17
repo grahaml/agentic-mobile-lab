@@ -30,9 +30,23 @@ dist/
 build/
 venv/
 .venv/
+env/
+ENV/
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
+
+# Python testing and coverage
+.pytest_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+htmlcov/
+nosetests.xml
+coverage.xml
+.ipynb_checkpoints/
 
 # Kubernetes/Docker local configs
 .kube/
@@ -41,3 +55,4 @@ __pycache__/
 *.crt
 .aider*
 mobile-nodes/local-manifests/
+manifests/*.backup.yaml

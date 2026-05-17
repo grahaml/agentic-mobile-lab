@@ -1,0 +1,110 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fleet-mcp
+  namespace: agent-execution
+spec:
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - nodePort: 30800
+    port: 8000
+    protocol: TCP
+    targetPort: 8000
+  selector:
+    app: fleet-mcp
+  sessionAffinity: None
+  type: NodePort
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    agent-role: s10e
+    device-id: 10.0.0.10
+    device-type: mobile
+  name: s10e
+  namespace: agent-execution
+spec:
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: ssh
+    port: 8022
+    protocol: TCP
+    targetPort: 8022
+  - name: ollama
+    port: 11434
+    protocol: TCP
+    targetPort: 11434
+  sessionAffinity: None
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    agent-role: s20
+    device-id: 10.0.0.20
+    device-type: mobile
+  name: s20
+  namespace: agent-execution
+spec:
+  internalTrafficPolicy: Cluster
+  ipFamilies:
+  - IPv4
+  ipFamilyPolicy: SingleStack
+  ports:
+  - name: ssh
+    port: 8022
+    protocol: TCP
+    targetPort: 8022
+  - name: ollama
+    port: 11434
+    protocol: TCP
+    targetPort: 11434
+  sessionAffinity: None
+  type: ClusterIP
+
+---
+apiVersion: v1
+data:
+  ca.crt: '-----BEGIN CERTIFICATE-----
+
+    MIIBdzCCAR2gAwIBAgIBADAKBggqhkjOPQQDAjAjMSEwHwYDVQQDDBhrM3Mtc2Vy
+
+    dmVyLWNhQDE3Nzc0Mjk5MTcwHhcNMjYwNDI5MDEzMTU3WhcNMzYwNDI2MDEzMTU3
+
+    WjAjMSEwHwYDVQQDDBhrM3Mtc2VydmVyLWNhQDE3Nzc0Mjk5MTcwWTATBgcqhkjO
+
+    PQIBBggqhkjOPQMBBwNCAAQmdBRQ80GFePJ/u73noaXvbf0HEQ9/1BkN7OTPvQ9v
+
+    //Axl9S1hAX4dCO0JTKhVEv0ErGCEfeNG8MMhxcNKdmao0IwQDAOBgNVHQ8BAf8E
+
+    BAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNVHQ4EFgQUi9YxE6Z9T5naXtJ0fnln
+
+    zlCfCUMwCgYIKoZIzj0EAwIDSAAwRQIgHCTbhqqrvjH1Jl1ISAuQPs+EOJK4pijj
+
+    yUMp4/byqQoCIQC4tNGK8bHlSQdhu0DgUFsbH3y3VhtUwTQCSaP1klcyLQ==
+
+    -----END CERTIFICATE-----
+
+    '
+kind: ConfigMap
+metadata:
+  annotations:
+    kubernetes.io/description: Contains a CA bundle that can be used to verify the
+      kube-apiserver when using internal endpoints such as the internal service IP
+      or kubernetes.default.svc. No other usage is guaranteed across distributions
+      of Kubernetes clusters.
+  name: kube-root-ca.crt
+  namespace: agent-execution
+

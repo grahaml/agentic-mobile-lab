@@ -1,0 +1,24 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fleet-mcp-ingress
+  namespace: agent-execution
+spec:
+  ingressClassName: traefik
+  rules:
+  - http:
+      paths:
+      - path: /fleet/sse
+        pathType: Prefix
+        backend:
+          service:
+            name: fleet-mcp
+            port:
+              number: 8000
+      - path: /fleet/messages
+        pathType: Prefix
+        backend:
+          service:
+            name: fleet-mcp
+            port:
+              number: 8000
