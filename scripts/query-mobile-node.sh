@@ -3,20 +3,36 @@
 # ==========================================
 # 📱 Mobile Agent Model Query
 # ==========================================
-# Queries an LLM running on a mobile node via 
+# Queries an LLM running on a mobile node via
 # its Ollama API.
+#
+# Updated 2026-05-27: Works with direct
+# network IPs (no k8s bridging required)
 # ==========================================
 
 set -e
 
-# Configuration
-NAMESPACE="agent-execution"
-KUBECONFIG_PATH="$HOME/.kube/k3s-config"
+# Configuration: Node name → IP mapping
+declare -A NODE_IPS=(
+    ["moto2023"]="10.0.0.30"
+    ["s10e"]="10.0.0.10"
+    ["s20fe"]="10.0.0.20"
+    ["moto"]="10.0.0.30"       # Alias
+    ["s10e"]="10.0.0.10"       # Alias
+    ["s20"]="10.0.0.20"        # Alias
+)
 
 # Usage
 usage() {
     echo "❌ Usage: $0 --node <node_name> --query <prompt> [--model <model_name>]"
-    echo "Example: $0 --node s20 --query \"Hello!\""
+    echo ""
+    echo "Available nodes:"
+    for node in "${!NODE_IPS[@]}"; do
+        echo "  $node (${NODE_IPS[$node]})"
+    done | sort -u
+    echo ""
+    echo "Example: $0 --node moto2023 --query \"Hello!\""
+    echo "Example: $0 --node moto2023 --query \"Sum 5+3\" --model qwen2.5-coder:7b"
     exit 1
 }
 
@@ -36,23 +52,22 @@ if [ -z "$NODE" ] || [ -z "$QUERY" ]; then
 fi
 
 # Binary Checks
-for cmd in kubectl curl jq; do
+for cmd in curl jq; do
     if ! command -v "$cmd" &> /dev/null; then
         echo "❌ ERROR: '$cmd' is not installed. Please install it to use this script."
         exit 1
     fi
 done
 
-echo "🔍 Resolving IP for node '$NODE'..."
-
-# 1. Resolve IP from K8s Endpoints
-export KUBECONFIG="$KUBECONFIG_PATH"
-IP=$(kubectl get endpoints "$NODE" -n "$NAMESPACE" -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null || true)
-
-if [ -z "$IP" ]; then
-    echo "❌ ERROR: Could not find IP for node '$NODE'. Is it bridged?"
-    exit 1
+# Resolve node name to IP
+if [ -z "${NODE_IPS[$NODE]}" ]; then
+    echo "❌ ERROR: Unknown node '$NODE'"
+    usage
 fi
+
+IP="${NODE_IPS[$NODE]}"
+
+echo "🔍 Resolving node '$NODE' at $IP..."
 
 # 2. Resolve Model if not provided
 if [ -z "$MODEL" ]; then
@@ -65,20 +80,24 @@ if [ -z "$MODEL" ]; then
     fi
 fi
 
-echo "🚀 Querying '$MODEL' at $IP..."
-echo "------------------------------------------"
+echo "🚀 Querying '$MODEL' at http://$IP:11434"
+echo "=================================================="
+echo ""
 
-# 3. Perform the query (Streaming)
-curl -s -N -X POST "http://$IP:11434/api/generate" \
-    -d "$(jq -n --arg model "$MODEL" --arg prompt "$QUERY" '{model: $model, prompt: $prompt}')" | \
-    while read -r line; do
-        # Extract the 'response' field and print it
-        echo "$line" | jq -r '.response // ""' | tr -d '\n'
-        # Check if we are done
-        if [[ $(echo "$line" | jq -r '.done') == "true" ]]; then
-            echo "" # Final newline
-            break
-        fi
-    done
+# 3. Perform the query (non-streaming for stats)
+start_time=$(date +%s%N)
 
-echo "------------------------------------------"
+response=$(curl -s -X POST "http://$IP:11434/api/generate" \
+    -d "$(jq -n --arg model "$MODEL" --arg prompt "$QUERY" '{model: $model, prompt: $prompt, stream: false}')")
+
+end_time=$(date +%s%N)
+elapsed_ms=$(( (end_time - start_time) / 1000000 ))
+
+echo "📝 Response:"
+echo "$response" | jq -r '.response'
+echo ""
+echo "📊 Performance Stats:"
+echo "  Total time: ${elapsed_ms}ms"
+echo "$response" | jq '{eval_count, eval_duration: .eval_duration/1000000, prompt_eval_count, prompt_eval_duration: .prompt_eval_duration/1000000}' | sed 's/^/  /'
+echo ""
+echo "=================================================="
