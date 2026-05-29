@@ -156,63 +156,36 @@ else
     echo "✅ SSH server is active."
 fi
 
-# 3b. Configure Termux Dashboard & Wake Lock
-echo "🪟 Configuring Termux Dashboard & Wake Lock..."
+# 3b. Configure Termux Wake Lock & Services
+echo "🔧 Configuring Termux wake lock & services..."
 adb shell "su $TERMUX_USER -g 3003 -c 'PATH=/data/data/com.termux/files/usr/bin:\$PATH /data/data/com.termux/files/usr/bin/pkg install root-repo -y > /dev/null 2>&1 || true'"
-adb shell "su $TERMUX_USER -g 3003 -c 'PATH=/data/data/com.termux/files/usr/bin:\$PATH /data/data/com.termux/files/usr/bin/pkg install tmux btop viddy -y > /dev/null 2>&1'"
 adb shell "su $TERMUX_USER -g 3003 -c 'PATH=/data/data/com.termux/files/usr/bin:\$PATH /data/data/com.termux/files/usr/bin/termux-wake-lock || true'"
 
-# Generate dashboard script on host and push it
-cat << 'EOF' > start-dashboard.sh
+# Generate services script on host and push it (starts sshd + mounts chroot + starts ollama, no dashboard)
+cat << 'EOF' > start-services.sh
 #!/data/data/com.termux/files/usr/bin/bash
 export PATH="/data/data/com.termux/files/usr/bin:$PATH"
 
-# Ensure SSH is running
 pgrep sshd >/dev/null || sshd
 
-# Ensure Ubuntu Chroot is mounted and Ollama is running
-# Note: We use su -c because these require root on the Android host
 su -c '
     UBUNTU_ROOT="/data/local/ubuntu"
     mount | grep -q "$UBUNTU_ROOT/proc" || mount -t proc proc "$UBUNTU_ROOT/proc"
     mount | grep -q "$UBUNTU_ROOT/sys" || mount -t sysfs sys "$UBUNTU_ROOT/sys"
     mount | grep -q "$UBUNTU_ROOT/dev" || mount --bind /dev "$UBUNTU_ROOT/dev"
     mount | grep -q "$UBUNTU_ROOT/dev/pts" || mount --bind /dev/pts "$UBUNTU_ROOT/dev/pts"
-    
-    # Start Ollama if not running
-    su -g 3003 -c "chroot $UBUNTU_ROOT /bin/su - agent-lab -c \"pgrep ollama >/dev/null || (export OLLAMA_HOST=0.0.0.0 && /usr/local/bin/ollama serve > ~/ollama.log 2>&1 &)\""
+    su -g 3003 -c "chroot /data/local/ubuntu /bin/su - agent-lab -c \"pgrep ollama >/dev/null || (export OLLAMA_HOST=0.0.0.0 && /usr/local/bin/ollama serve > /home/agent-lab/ollama.log 2>&1 &)\""
 '
-
-# Start a new detached tmux session
-tmux has-session -t agent-dashboard 2>/dev/null
-if [ $? != 0 ]; then
-    tmux new-session -d -s agent-dashboard
-
-    # Top pane (0): btop
-    tmux send-keys -t agent-dashboard:0.0 "btop" C-m
-
-    # Split vertically (Pane 1 at 70% down)
-    tmux split-window -v -p 30 -t agent-dashboard:0.0
-
-    # Bottom pane (1): Chrooted Ollama status (using viddy)
-    tmux send-keys -t agent-dashboard:0.1 "viddy -n 2 \"su -c 'su -g 3003 -c \\\"chroot /data/local/ubuntu /usr/local/bin/ollama ps\\\"'\"" C-m
-fi
-
-# Attach to session
-tmux attach-session -t agent-dashboard
 EOF
 
-adb push start-dashboard.sh /data/local/tmp/start-dashboard.sh
-rm start-dashboard.sh
-adb shell "su -c 'mv /data/local/tmp/start-dashboard.sh $TERMUX_HOME/start-dashboard.sh && chown $TERMUX_USER:$TERMUX_USER $TERMUX_HOME/start-dashboard.sh && chmod +x $TERMUX_HOME/start-dashboard.sh'"
-
-# Auto-launch on open
-adb shell "su -c 'grep -q start-dashboard.sh $TERMUX_HOME/.bashrc 2>/dev/null || echo -e \"\n# Auto-start dashboard\nif [ -z \\\"\$TMUX\\\" ]; then\n    ~/start-dashboard.sh\nfi\" >> $TERMUX_HOME/.bashrc'"
+adb push start-services.sh /data/local/tmp/start-services.sh
+rm start-services.sh
+adb shell "su -c 'mv /data/local/tmp/start-services.sh $TERMUX_HOME/start-services.sh && chown $TERMUX_USER:$TERMUX_USER $TERMUX_HOME/start-services.sh && chmod +x $TERMUX_HOME/start-services.sh'"
 
 # 3c. Configure Termux:Boot script
 echo "🚀 Configuring Termux:Boot startup script..."
 adb shell "su -c 'mkdir -p $TERMUX_HOME/.termux/boot && \
-                 echo -e \"#!/data/data/com.termux/files/usr/bin/bash\nsshd\ntermux-wake-lock\n~/start-dashboard.sh\" > $TERMUX_HOME/.termux/boot/start-agent && \
+                 echo -e \"#!/data/data/com.termux/files/usr/bin/bash\ntermux-wake-lock\nsshd\n~/start-services.sh\" > $TERMUX_HOME/.termux/boot/start-agent && \
                  chown -R $TERMUX_USER:$TERMUX_USER $TERMUX_HOME/.termux && \
                  chmod +x $TERMUX_HOME/.termux/boot/start-agent'"
 

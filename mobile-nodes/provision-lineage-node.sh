@@ -69,7 +69,7 @@ run_adb_root "cat /data/local/tmp/mobile_key.pub >> $TERMUX_HOME/.ssh/authorized
 
 # 6. Helper for SSH commands
 run_ssh() {
-    ssh -i "$DEVICE_KEY" -p 8022 -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$TERMUX_USER@$PHONE_IP" "$1"
+    ssh -i "$DEVICE_KEY" -p 8022 -o StrictHostKeyChecking=no -o ConnectTimeout=10 "$TERMUX_USER@$PHONE_IP" "export PATH=/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/applets:\$PATH && $1"
 }
 
 # --- 7. Ubuntu Identity Bridge (GID Alignment) ---
@@ -96,64 +96,38 @@ $ADB_BIN -s "$PHONE_IP" shell settings put global wifi_sleep_policy 2 >/dev/null
 $ADB_BIN -s "$PHONE_IP" shell dumpsys deviceidle whitelist +com.termux >/dev/null 2>&1 || true
 
 echo "📦 Configuring Termux environment..."
-run_ssh "pkg update && pkg install tmux htop openssh -y >/dev/null 2>&1"
+run_ssh "pkg update && pkg install openssh -y >/dev/null 2>&1"
 run_ssh "termux-wake-lock || true"
 
-# --- 8b. Dashboard & Persistence (V2) ---
-echo "🪟 Configuring Dashboard V2 & Persistence..."
+# --- 8b. Services & Persistence ---
+echo "🔧 Configuring services & Termux:Boot persistence..."
 
-# Generate dashboard script
-DASHBOARD_SCRIPT=$(cat << 'EOF'
+# Generate services script (starts sshd + mounts chroot + starts ollama, no dashboard)
+SERVICES_SCRIPT=$(cat << 'EOF'
 #!/data/data/com.termux/files/usr/bin/bash
 export PATH="/data/data/com.termux/files/usr/bin:$PATH"
 
-# Ensure SSH is running
 pgrep sshd >/dev/null || sshd
 
-# Ensure Ubuntu Chroot is mounted and Ollama is running
-# Note: We use su -c because these require root on the Android host
 su -c '
     UBUNTU_ROOT="/data/local/ubuntu"
     mount | grep -q "$UBUNTU_ROOT/proc" || mount -t proc proc "$UBUNTU_ROOT/proc"
     mount | grep -q "$UBUNTU_ROOT/sys" || mount -t sysfs sys "$UBUNTU_ROOT/sys"
     mount | grep -q "$UBUNTU_ROOT/dev" || mount --bind /dev "$UBUNTU_ROOT/dev"
     mount | grep -q "$UBUNTU_ROOT/dev/pts" || mount --bind /dev/pts "$UBUNTU_ROOT/dev/pts"
-    
-    # Start Ollama if not running
-    su -g 3003 -c "chroot $UBUNTU_ROOT /usr/bin/setpriv --reuid=1000 --regid=1000 --groups=1000,3003 /usr/bin/env -i HOME=/home/agent-lab TERM=$TERM PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin TMPDIR=/tmp /bin/bash -c \"pgrep ollama >/dev/null || (export OLLAMA_HOST=0.0.0.0 && /usr/local/bin/ollama serve > ~/ollama.log 2>&1 &)\""
+    su -g 3003 -c "chroot /data/local/ubuntu /usr/bin/setpriv --reuid=1000 --regid=1000 --groups=1000,3003 /usr/bin/env -i HOME=/home/agent-lab TERM=xterm PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin TMPDIR=/tmp /bin/bash -c \"pgrep ollama >/dev/null || (export OLLAMA_HOST=0.0.0.0 && /usr/local/bin/ollama serve > /home/agent-lab/ollama.log 2>&1 &)\""
 '
-
-# Start a new detached tmux session
-tmux has-session -t agent-dashboard 2>/dev/null
-if [ $? != 0 ]; then
-    tmux new-session -d -s agent-dashboard
-
-    # Top pane (0): btop
-    tmux send-keys -t agent-dashboard:0.0 "btop" C-m
-
-    # Split vertically (Pane 1 at 70% down)
-    tmux split-window -v -p 30 -t agent-dashboard:0.0
-
-    # Bottom pane (1): Chrooted Ollama status
-    tmux send-keys -t agent-dashboard:0.1 "watch -n 2 \"su -c 'su -g 3003 -c \\\"chroot /data/local/ubuntu /usr/local/bin/ollama ps\\\"'\"" C-m
-fi
-
-# Attach to session
-tmux attach-session -t agent-dashboard
 EOF
 )
 
-# Push dashboard script via SSH
-run_ssh "cat > ~/start-dashboard.sh << 'DASHBOARD_EOF'
-$DASHBOARD_SCRIPT
-DASHBOARD_EOF
-chmod +x ~/start-dashboard.sh"
-
-# Auto-launch on open (.bashrc)
-run_ssh "grep -q 'start-dashboard.sh' ~/.bashrc || echo -e '\n# Auto-start dashboard\nif [ -z \"\$TMUX\" ]; then\n    ~/start-dashboard.sh\nfi' >> ~/.bashrc"
+# Push services script via SSH
+run_ssh "cat > ~/start-services.sh << 'SERVICES_EOF'
+$SERVICES_SCRIPT
+SERVICES_EOF
+chmod +x ~/start-services.sh"
 
 # Configure Termux:Boot
-run_ssh "mkdir -p ~/.termux/boot && echo -e '#!/data/data/com.termux/files/usr/bin/bash\ntermux-wake-lock\nsshd\n~/start-dashboard.sh' > ~/.termux/boot/start-agent && chmod +x ~/.termux/boot/start-agent"
+run_ssh "mkdir -p ~/.termux/boot && echo -e '#!/data/data/com.termux/files/usr/bin/bash\ntermux-wake-lock\nsshd\n~/start-services.sh' > ~/.termux/boot/start-agent && chmod +x ~/.termux/boot/start-agent"
 
 echo "📁 Mounting filesystems and fixing /tmp for chroot..."
 run_adb_root "mount -t proc proc $UBUNTU_ROOT/proc || true"
