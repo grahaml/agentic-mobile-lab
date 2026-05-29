@@ -26,7 +26,7 @@ echo "📦 Updating Termux and installing build tools..."
 pkg update -y && pkg upgrade -y || (pkg update -y && pkg upgrade -y -f)
 # Install all required native tools
 pkg install root-repo -y || true
-pkg install ollama python git openssh gh rust binutils build-essential clang -y || (apt update && apt install -y ollama python git openssh gh rust binutils build-essential clang)
+pkg install ollama python git openssh gh rust binutils build-essential clang jq termux-api cronie -y || (apt update && apt install -y ollama python git openssh gh rust binutils build-essential clang jq termux-api cronie)
 
 # Prevent CPU sleep
 echo "🛡️  Acquiring Termux CPU Wake Lock..."
