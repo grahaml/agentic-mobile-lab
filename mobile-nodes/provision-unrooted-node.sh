@@ -236,4 +236,15 @@ ssh -i "$DEVICE_KEY" -p 8022 -o StrictHostKeyChecking=no "$TERMUX_USER@$PHONE_IP
 echo "🔗 Registering in k3s cluster..."
 "$DIR/bridge-phone.sh" "$PHONE_IP" "$SERVICE_ROLE" "$DEVICE_ID"
 
+# --- 6. Telemetry Agent ---
+# Installs the hermes-experimentation push agent (metrics_push.sh + cron) on the device.
+# Requires the device name to match an entry in langgraph/persona_config.yaml.
+# SERVICE_ROLE is used as the device name — keep it in sync with persona_config.
+echo "📡 Installing telemetry push agent..."
+if bash "$DIR/install-telemetry.sh" "$SERVICE_ROLE"; then
+    echo "📡 Telemetry agent installed."
+else
+    echo "⚠️  Telemetry install failed — run: bash mobile-nodes/install-telemetry.sh $SERVICE_ROLE"
+fi
+
 echo "✅ Provisioning Complete. Secure handoff verified."

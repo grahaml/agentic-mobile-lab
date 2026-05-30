@@ -175,5 +175,39 @@ run_adb_root "$CHROOT_USER 'export OLLAMA_HOST=0.0.0.0 && /usr/local/bin/ollama 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 "$DIR/bridge-phone.sh" "$PHONE_IP" "$SERVICE_ROLE" "$DEVICE_MODEL"
 
+# 12. Telemetry Agent (inside Ubuntu chroot)
+# Install jq + cron, copy the push script, and wire up a crontab entry.
+echo "📡 Installing telemetry push agent in Ubuntu chroot..."
+HERMES_REPO="$(cd "$DIR/../../hermes-experimentation" 2>/dev/null && pwd || true)"
+METRICS_SCRIPT="$HERMES_REPO/telemetry/agent/metrics_push.sh"
+if [ -z "$HERMES_REPO" ] || [ ! -f "$METRICS_SCRIPT" ]; then
+    echo "⚠️  hermes-experimentation repo not found — skipping telemetry install."
+    echo "    Set HERMES_REPO=/path/to/hermes-experimentation and re-run step 12 manually."
+else
+    COLLECTOR_IP="${COLLECTOR_IP:-10.0.0.11}"
+    COLLECTOR_URL="http://${COLLECTOR_IP}:8765/metrics"
+    AGENT_DIR="/home/agent-lab/telemetry-agent"
+
+    # Install deps in chroot
+    run_adb_root "$CHROOT_EXEC 'apt install -y jq cron'"
+
+    # Copy and patch the push script
+    run_adb_root "mkdir -p $UBUNTU_ROOT$AGENT_DIR"
+    $ADB_BIN push "$METRICS_SCRIPT" "/data/local/tmp/metrics_push.sh"
+    run_adb_root "cp /data/local/tmp/metrics_push.sh $UBUNTU_ROOT$AGENT_DIR/metrics_push.sh"
+    run_adb_root "sed -i 's|__COLLECTOR_URL__|${COLLECTOR_URL}|g; s|__DEVICE_NAME__|${SERVICE_ROLE}|g' $UBUNTU_ROOT$AGENT_DIR/metrics_push.sh"
+    run_adb_root "chmod +x $UBUNTU_ROOT$AGENT_DIR/metrics_push.sh && chown -R 1000:1000 $UBUNTU_ROOT$AGENT_DIR"
+
+    # Wire crontab inside chroot
+    CRON_LINE="* * * * * $AGENT_DIR/metrics_push.sh"
+    CRON_LINE2="* * * * * sleep 30 && $AGENT_DIR/metrics_push.sh"
+    run_adb_root "$CHROOT_USER '(crontab -l 2>/dev/null | grep -qF metrics_push) || (crontab -l 2>/dev/null; echo \"$CRON_LINE\"; echo \"$CRON_LINE2\") | crontab -'"
+    run_adb_root "$CHROOT_EXEC 'service cron start 2>/dev/null || cron 2>/dev/null || true'"
+
+    # Fire one immediate push
+    run_adb_root "$CHROOT_USER '$AGENT_DIR/metrics_push.sh'"
+    echo "📡 Telemetry agent installed in chroot (pushing to $COLLECTOR_URL as '$SERVICE_ROLE')."
+fi
+
 echo "✅ Provisioning Complete for $PERSONA_NAME!"
 echo "📶 Access via: ssh -i $DEVICE_KEY -p 8022 $TERMUX_USER@$PHONE_IP"
