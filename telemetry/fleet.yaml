@@ -1,0 +1,42 @@
+# Device fleet definition — canonical source of truth for the mobile node pool.
+#
+# Each device maps to a static lab IP (10.0.0.0/24), a capability tier, and the
+# Ollama model it serves. The telemetry collector/install-fleet and any agent
+# routing (e.g. the hermes experiment repos) read this file. Hermes locates it
+# via the FLEET_CONFIG env var, defaulting to this path.
+#
+# `name` MUST match the `device` field each node's push agent sends, or the
+# collector will leave it permanently `never_seen`.
+tiers:
+  high:                         # 7b — quality over speed
+    devices:
+      - name: moto
+        base_url: "http://10.0.0.30:11434"
+        model: "qwen2.5-coder:7b-16k"
+      - name: s20plus
+        base_url: "http://10.0.0.200:11434"
+        model: "qwen2.5-coder:7b-16k"   # confirm model variant once running
+
+  mid:                          # 3b — balanced
+    devices:
+      - name: s20fe
+        base_url: "http://10.0.0.20:11434"
+        model: "qwen2.5-coder:3b-16k"
+      # add more 3b devices here
+
+  low:                          # 1.5b — fast, lighter tasks
+    devices:
+      - name: s10e
+        base_url: "http://10.0.0.10:11434"
+        model: "qwen2.5-coder:1.5b"
+      - name: ph1
+        base_url: "http://10.0.0.40:11434"
+        model: "qwen2.5-coder:1.5b"   # confirm model once Ollama is up
+      # add more low-tier devices here
+
+  ultra-low:                    # 0.5b and below — simplest tasks only
+    devices:
+      - name: s8
+        base_url: "http://10.0.0.8:11434"
+        model: "qwen2.5:0.5b"         # confirm model once Ollama is up
+      # add more ultra-low devices here

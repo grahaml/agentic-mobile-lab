@@ -111,6 +111,16 @@ For maximum security, this runtime includes a `swarm-exec.py` utility that allow
   python3 swarm-exec.py "import platform; print(platform.system())"
   ```
 
+## Fleet Telemetry (`telemetry/`)
+
+Centralized observability for the mobile node fleet, distinct from the on-device
+`btop`/`ollama ps` dashboard (see `specs/mobile-dashboard-v2.md`):
+
+- **Source of truth**: `telemetry/fleet.yaml` declares the device pool (name → static IP → tier → model). The collector, the fleet installer, and external agent code (e.g. the hermes experiment repos, via the `FLEET_CONFIG` env var) all read this file.
+- **Push agent**: `telemetry/agent/` runs on each Termux node (cron) and POSTs battery/thermal/memory + `ollama ps` to the collector. Roll it out with `telemetry/install-fleet.sh` (or `mobile-nodes/install-telemetry.sh <device>` for a single node).
+- **Receiver/collector**: `receiver.py` ingests pushes on `:8765`; `collector.py` joins them against `fleet.yaml` and derives staleness + alerts (high temp, high mem, low battery, ollama down).
+- **Dashboard**: `dashboard.py` is a Rich TUI on Macbuntu that renders live fleet health.
+
 ## Security Audit: Egress Control
 
 A "Red Team" exfiltration test was conducted to verify the isolation of the `agent-execution` namespace.

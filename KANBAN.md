@@ -43,6 +43,7 @@
   - [x] [NODE-003-D] Update `provision-lineage-node.sh`
   - [ ] [NODE-003-E] Deploy Dashboard V2 to Samsung S10e
   - [/] [NODE-003-F] Deploy Dashboard V2 to Motorola Edge (Chroot-aware)
+  - [x] [NODE-003-G] Relocate centralized fleet telemetry (receiver/collector/dashboard + push agent) into `telemetry/`, with `telemetry/fleet.yaml` as the canonical device pool | [Specs](specs/telemetry-dashboard.md)
 
 ---
 
