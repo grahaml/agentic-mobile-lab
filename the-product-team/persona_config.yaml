@@ -1,0 +1,34 @@
+# Persona definitions for the langgraph vertical slice.
+#
+# The device fleet (the `tiers:` block — device → IP → model) is platform data
+# and now lives in private-agent-runtime/telemetry/fleet.yaml. load_config() in
+# graph.py merges that file's `tiers` in at runtime (override path with the
+# FLEET_CONFIG env var). Each persona's `tier` here must match a tier in fleet.yaml.
+personas:
+  taran:
+    soul: tech-lead.soul.md
+    tier: high
+  sable:
+    soul: security-engineer.soul.md
+    tier: high
+  soren:
+    soul: sr-developer.soul.md
+    tier: mid
+  kai:
+    soul: sre-platform-engineer.soul.md
+    tier: mid
+  remy:
+    soul: orchestrator.soul.md
+    tier: mid
+  jules:
+    soul: jr-developer.soul.md
+    tier: low
+  iris:
+    soul: intermediate-developer.soul.md
+    tier: low
+  pria:
+    soul: product-manager.soul.md
+    tier: low
+  voss:
+    soul: vp-engineering.soul.md
+    tier: low
