@@ -206,6 +206,11 @@ def _render_panel(status: DeviceStatus) -> Panel:
         lines.append(unreachable)
     elif status.models_loaded:
         lines.extend(_model_lines(status))
+    elif status.models_available:
+        loading_line = Text()
+        loading_line.append("⟳ ", style="yellow")
+        loading_line.append(f"loading  {status.models_available[0]}", style="yellow")
+        lines.append(loading_line)
     else:
         idle_line = Text()
         idle_line.append("○ ", style="dim")
