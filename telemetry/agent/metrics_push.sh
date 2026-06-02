@@ -57,7 +57,9 @@ if [ -r /proc/meminfo ]; then
     [ -n "$MEM_AVAIL_KB" ] && MEM_AVAIL=$(( MEM_AVAIL_KB / 1024 ))
 fi
 
-# --- Swap (/proc/swaps, line 2; sizes are in kB) ----------------------------
+# --- Swap (/proc/swaps → su fallback → free -m fallback) -------------------
+# /proc/swaps is root-gated on many OEMs. Fall back to `free -m` which reports
+# swap totals in MB without requiring elevated permissions.
 SWAP_TOTAL=0
 SWAP_USED=0
 if [ -r /proc/swaps ]; then
@@ -67,6 +69,24 @@ if [ -r /proc/swaps ]; then
         SWAP_USED_KB=$(printf '%s' "$SWAP_LINE" | awk '{print $2}')
         [ -n "$SWAP_TOTAL_KB" ] && SWAP_TOTAL=$(( SWAP_TOTAL_KB / 1024 ))
         [ -n "$SWAP_USED_KB" ] && SWAP_USED=$(( SWAP_USED_KB / 1024 ))
+    fi
+elif command -v su >/dev/null 2>&1; then
+    SWAP_LINE=$(su -c "awk 'NR==2 {print \$3, \$4; exit}' /proc/swaps" 2>/dev/null)
+    if [ -n "$SWAP_LINE" ]; then
+        SWAP_TOTAL_KB=$(printf '%s' "$SWAP_LINE" | awk '{print $1}')
+        SWAP_USED_KB=$(printf '%s' "$SWAP_LINE" | awk '{print $2}')
+        [ -n "$SWAP_TOTAL_KB" ] && SWAP_TOTAL=$(( SWAP_TOTAL_KB / 1024 ))
+        [ -n "$SWAP_USED_KB" ] && SWAP_USED=$(( SWAP_USED_KB / 1024 ))
+    fi
+fi
+
+if [ "$SWAP_TOTAL" = "0" ] && command -v free >/dev/null 2>&1; then
+    SWAP_LINE=$(free -m 2>/dev/null | awk '/^Swap:/ {print $2, $3; exit}')
+    if [ -n "$SWAP_LINE" ]; then
+        _st=$(printf '%s' "$SWAP_LINE" | awk '{print $1}')
+        _su=$(printf '%s' "$SWAP_LINE" | awk '{print $2}')
+        [ -n "$_st" ] && SWAP_TOTAL="$_st"
+        [ -n "$_su" ] && SWAP_USED="$_su"
     fi
 fi
 
