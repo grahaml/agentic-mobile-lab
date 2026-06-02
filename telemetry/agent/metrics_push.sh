@@ -12,17 +12,25 @@
 COLLECTOR="__COLLECTOR_URL__"   # patched by install.sh
 DEVICE_NAME="__DEVICE_NAME__"   # patched by install.sh
 
-# --- Battery (sysfs → dumpsys fallback) ------------------------------------
-# Some OEMs (Samsung, Motorola) deny sysfs battery reads to non-root processes.
-# Fall back to dumpsys battery which works without root on all tested devices.
+# --- Battery (sysfs → su sysfs → dumpsys fallback) -------------------------
+# Direct sysfs reads fail without root on many OEMs. Try plain read first,
+# then su -c on rooted devices, then dumpsys as a last resort.
 BATT_PCT="null"
 BATT_TEMP="null"
 BATT_STATUS="unknown"
 BATT_BASE="/sys/class/power_supply/battery"
 _read_sysfs() { IFS= read -r -t 2 val < "$1" 2>/dev/null && printf '%s' "$val"; }
+_read_sysfs_root() { su -c "cat '$1'" 2>/dev/null; }
 _v=$(_read_sysfs "$BATT_BASE/capacity") && [ -n "$_v" ] && BATT_PCT="$_v"
 _v=$(_read_sysfs "$BATT_BASE/temp")     && [ -n "$_v" ] && BATT_TEMP=$(awk -v t="$_v" 'BEGIN {printf "%.1f", t/10}')
 _v=$(_read_sysfs "$BATT_BASE/status")   && [ -n "$_v" ] && BATT_STATUS=$(printf '%s' "$_v" | tr '[:upper:]' '[:lower:]')
+
+# su fallback for rooted devices where sysfs is root-only (e.g. Motorola MTK)
+if [ "$BATT_PCT" = "null" ] && command -v su >/dev/null 2>&1; then
+    _v=$(_read_sysfs_root "$BATT_BASE/capacity") && [ -n "$_v" ] && BATT_PCT="$_v"
+    _v=$(_read_sysfs_root "$BATT_BASE/temp")     && [ -n "$_v" ] && BATT_TEMP=$(awk -v t="$_v" 'BEGIN {printf "%.1f", t/10}')
+    _v=$(_read_sysfs_root "$BATT_BASE/status")   && [ -n "$_v" ] && BATT_STATUS=$(printf '%s' "$_v" | tr '[:upper:]' '[:lower:]')
+fi
 
 if [ "$BATT_PCT" = "null" ] && command -v dumpsys >/dev/null 2>&1; then
     _DUMP=$(dumpsys battery 2>/dev/null)
@@ -62,7 +70,7 @@ if [ -r /proc/swaps ]; then
     fi
 fi
 
-# --- CPU temperature (thermal zones → direct path → dumpsys fallback) ------
+# --- CPU temperature (thermal zones → su fallback → battery temp) ----------
 CPU_TEMP="null"
 for zone in /sys/class/thermal/thermal_zone*/temp; do
     if [ -r "$zone" ]; then
@@ -79,6 +87,18 @@ if [ "$CPU_TEMP" = "null" ]; then
     for zone in /sys/class/thermal/thermal_zone0/temp \
                 /sys/devices/virtual/thermal/thermal_zone0/temp; do
         RAW=$(_read_sysfs "$zone")
+        if [ -n "$RAW" ] && [ "$RAW" -gt 0 ] 2>/dev/null; then
+            CPU_TEMP=$(awk -v t="$RAW" 'BEGIN {printf "%.1f", t/1000}')
+            break
+        fi
+    done
+fi
+
+# su fallback for rooted devices where thermal sysfs is root-only
+if [ "$CPU_TEMP" = "null" ] && command -v su >/dev/null 2>&1; then
+    for zone in /sys/class/thermal/thermal_zone0/temp \
+                /sys/devices/virtual/thermal/thermal_zone0/temp; do
+        RAW=$(_read_sysfs_root "$zone")
         if [ -n "$RAW" ] && [ "$RAW" -gt 0 ] 2>/dev/null; then
             CPU_TEMP=$(awk -v t="$RAW" 'BEGIN {printf "%.1f", t/1000}')
             break
