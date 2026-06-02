@@ -237,6 +237,17 @@ else
     adb shell "su -c 'su -g 3003 -c \"chroot $UBUNTU_ROOT /bin/su - agent-lab -c \\\"export OLLAMA_HOST=0.0.0.0 && /usr/local/bin/ollama pull $MODEL_NAME\\\"\"'"
 fi
 
+# 6b. Pre-warm the model so it's in RAM and ready for inference (no cold starts)
+if [ -n "$PHONE_IP" ]; then
+    echo "🔥 Pre-warming $MODEL_NAME (keep_alive: -1)..."
+    curl -s --max-time 300 -X POST "http://$PHONE_IP:11434/api/generate" \
+        -H "Content-Type: application/json" \
+        -d "{\"model\": \"$MODEL_NAME\", \"prompt\": \"\", \"keep_alive\": -1}" \
+        -o /dev/null && echo "✅ Model is loaded and warm." || echo "⚠️  Warmup failed — model will cold-start on first request."
+else
+    echo "⚠️  Phone IP unknown — skipping warmup. Run set-mobile-model.sh manually after provisioning."
+fi
+
 # 7. Deploy Hardened enter-lab.sh
 echo "🛡️  Deploying enter-lab.sh dispatcher..."
 # Note: Using the current script in our repo (must be in same dir)

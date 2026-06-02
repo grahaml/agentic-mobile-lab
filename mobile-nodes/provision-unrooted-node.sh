@@ -232,6 +232,18 @@ echo "⚙️  Executing internal setup via SSH..."
 TERMUX_BASH="/data/data/com.termux/files/usr/bin/bash"
 ssh -i "$DEVICE_KEY" -p 8022 -o StrictHostKeyChecking=no "$TERMUX_USER@$PHONE_IP" "export ANDROID_API_LEVEL=$API_LEVEL && export OLLAMA_HOST=0.0.0.0 && $TERMUX_BASH $TERMUX_HOME/setup.sh"
 
+# --- 4b. Pre-warm the installed model ---
+echo "🔥 Pre-warming installed model (keep_alive: -1)..."
+WARM_MODEL=$(curl -s --max-time 10 "http://$PHONE_IP:11434/api/tags" | python3 -c "import sys,json; m=json.load(sys.stdin).get('models',[]); print(m[0]['name'] if m else '')" 2>/dev/null || true)
+if [ -n "$WARM_MODEL" ]; then
+    curl -s --max-time 300 -X POST "http://$PHONE_IP:11434/api/generate" \
+        -H "Content-Type: application/json" \
+        -d "{\"model\": \"$WARM_MODEL\", \"prompt\": \"\", \"keep_alive\": -1}" \
+        -o /dev/null && echo "✅ '$WARM_MODEL' is loaded and warm." || echo "⚠️  Warmup failed — model will cold-start on first request."
+else
+    echo "⚠️  No model found on device yet — run set-mobile-model.sh after provisioning."
+fi
+
 # --- 5. Cluster Registration ---
 echo "🔗 Registering in k3s cluster..."
 "$DIR/bridge-phone.sh" "$PHONE_IP" "$SERVICE_ROLE" "$DEVICE_ID"

@@ -114,6 +114,14 @@ if ! OLLAMA_HOST="http://$IP:11434" ollama pull "$MODEL"; then
     exit 1
 fi
 
+# 2b. Pre-warm the model so it's in RAM and ready for inference (no cold starts)
+echo "🔥 Pre-warming '$MODEL' (keep_alive: -1)..."
+curl -s --max-time 300 -X POST "http://$IP:11434/api/generate" \
+    -H "Content-Type: application/json" \
+    -d "{\"model\": \"$MODEL\", \"prompt\": \"\", \"keep_alive\": -1}" \
+    -o /dev/null
+echo "✅ Model '$MODEL' is loaded and warm."
+
 # 3. Update enter-lab.sh on the device via SSH (if it exists)
 echo "🛡️  Checking for enter-lab.sh on $NODE..."
 
