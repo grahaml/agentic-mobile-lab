@@ -21,7 +21,7 @@ tiers:
     devices:
       - name: s20fe
         base_url: "http://10.0.0.20:11434"
-        model: "qwen2.5-coder:3b-16k"
+        model: "qwen2.5-coder:3b"
       # add more 3b devices here
 
   low:                          # 1.5b — fast, lighter tasks
