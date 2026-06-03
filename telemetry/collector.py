@@ -27,7 +27,7 @@ from telemetry import receiver
 ALERT_TEMP_C = 42.0       # battery_temp_c or cpu_temp_c at/above this → "high_temp"
 ALERT_MEM_PCT = 85.0      # mem_used_pct at/above this → "high_mem"
 ALERT_BATTERY_PCT = 20    # battery_pct at/below this + discharging → "low_battery"
-STALE_AFTER_S = 90.0      # pushed metrics older than this → metrics_stale=True
+STALE_AFTER_S = 120.0     # pushed metrics older than this → metrics_stale=True
 TIER_ORDER = ["high", "mid", "low", "ultra-low"]
 
 _TIER_RANK = {t: i for i, t in enumerate(TIER_ORDER)}
