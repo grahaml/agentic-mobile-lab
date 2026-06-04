@@ -14,7 +14,6 @@ from __future__ import annotations
 import sys
 import time
 import traceback
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import urlparse
@@ -22,45 +21,16 @@ from urllib.parse import urlparse
 import yaml
 
 from telemetry import receiver
+from telemetry.models import DeviceStatus as _DeviceStatusBase
 
 # Tunable thresholds
-ALERT_TEMP_C = 42.0       # battery_temp_c or cpu_temp_c at/above this → "high_temp"
-ALERT_MEM_PCT = 85.0      # mem_used_pct at/above this → "high_mem"
-ALERT_BATTERY_PCT = 20    # battery_pct at/below this + discharging → "low_battery"
-STALE_AFTER_S = 120.0     # pushed metrics older than this → metrics_stale=True
+from telemetry.models import ALERT_TEMP_C, ALERT_MEM_PCT, ALERT_BATTERY_PCT, STALE_AFTER_S  # noqa: E402
 TIER_ORDER = ["high", "mid", "low", "ultra-low"]
 
 _TIER_RANK = {t: i for i, t in enumerate(TIER_ORDER)}
 
 
-@dataclass
-class DeviceStatus:
-    # Identity (from fleet.yaml)
-    name: str
-    ip: str
-    base_url: str
-    tier: str
-
-    # Ollama (from the device's pushed payload — None/empty if push lacked it)
-    ollama_ok: bool = False
-    models_loaded: list[dict] = field(default_factory=list)
-    models_available: list[str] = field(default_factory=list)
-
-    # System (from pushed payload; None if device never pushed)
-    battery_pct: Optional[int] = None
-    battery_temp_c: Optional[float] = None
-    battery_status: Optional[str] = None
-    mem_total_mb: Optional[int] = None
-    mem_available_mb: Optional[int] = None
-    swap_total_mb: Optional[int] = None
-    swap_used_mb: Optional[int] = None
-    cpu_temp_c: Optional[float] = None
-
-    # Derived
-    mem_used_pct: Optional[float] = None
-    metrics_age_s: Optional[float] = None
-    metrics_stale: bool = False
-    alerts: list[str] = field(default_factory=list)
+DeviceStatus = _DeviceStatusBase
 
 
 # Hooks: called as hook(device_status, alert_name) for each fired alert.
