@@ -314,6 +314,156 @@ def _render_panel(status: DeviceStatus, width: int = 48) -> Panel:
 
 
 # ---------------------------------------------------------------------------
+# Full-screen device panel (portrait phone layout)
+# ---------------------------------------------------------------------------
+
+
+def _render_device_panel(status: DeviceStatus, width: int) -> Panel:
+    """Large-format single-device panel for on-device display.
+
+    Labels are on their own line (uppercase, bold), bars span the full panel
+    width and repeat 3 rows tall so they read clearly on high-DPI screens.
+    """
+    stale = status.metrics_stale
+    # padding=(1,1): 1 border + 1 pad each side → inner = width - 4
+    inner_w = width - 4
+    bar_w   = inner_w
+
+    sp = Text("")  # blank spacer line
+
+    def _hdr(label: str, *parts: tuple[str, str]) -> Text:
+        t = Text()
+        t.append(label, style="dim bold" if stale else "bold")
+        for val, sty in parts:
+            t.append(val, style="dim" if stale else sty)
+        return t
+
+    def _fat_bar(pct: float, color: str, rows: int = 3) -> list[Text]:
+        s = ("dim " if stale else "") + color
+        return [Text(_bar(pct, bar_w), style=s) for _ in range(rows)]
+
+    lines: list[Text] = []
+
+    # ----- Ollama / model -----
+    if not status.ollama_ok and not stale:
+        t = Text()
+        t.append("✗  Ollama unreachable", style="red bold")
+        lines.append(t)
+    elif status.models_loaded:
+        first = status.models_loaded[0]
+        name = first.get("name") or first.get("model") or "?"
+        extra = len(status.models_loaded) - 1
+        t = Text()
+        t.append("● ", style="green")
+        t.append(name, style="bold")
+        if extra:
+            t.append(f" (+{extra})", style="dim")
+        lines.append(t)
+        details = first.get("details") or {}
+        ctx = (first.get("context_length") or first.get("num_ctx")
+               or details.get("context_length"))
+        expires_str = _format_expires_at(first.get("expires_at"))
+        sub = Text("  ")
+        if ctx:
+            sub.append(f"ctx {ctx}  ·  ", style="dim")
+        sub.append(
+            f"expires in {expires_str}" if expires_str != "idle" else "idle",
+            style="dim",
+        )
+        lines.append(sub)
+    else:
+        t = Text()
+        t.append("○  idle", style="dim")
+        if status.models_available:
+            t.append(f"  ·  {status.models_available[0]}", style="dim")
+        lines.append(t)
+
+    lines.append(sp)
+
+    # ----- Memory -----
+    if status.mem_used_pct is not None and status.mem_total_mb is not None:
+        color   = _mem_color(status.mem_used_pct)
+        used_gb = _mb_to_gb(status.mem_total_mb - (status.mem_available_mb or 0))
+        tot_gb  = _mb_to_gb(status.mem_total_mb)
+        lines.append(_hdr(
+            "MEMORY",
+            (f"  {status.mem_used_pct:.0f}%", color),
+            (f"  {used_gb:.1f} / {tot_gb:.1f} GB", "dim"),
+        ))
+        lines.extend(_fat_bar(status.mem_used_pct, color))
+    else:
+        lines.append(_hdr("MEMORY", ("  —", "dim")))
+
+    lines.append(sp)
+
+    # ----- Swap -----
+    if status.swap_total_mb and status.swap_total_mb > 0 and status.swap_used_mb is not None:
+        pct     = (status.swap_used_mb / status.swap_total_mb) * 100
+        color   = _swap_color(status.swap_used_mb, status.swap_total_mb)
+        used_gb = _mb_to_gb(status.swap_used_mb) or 0.0
+        tot_gb  = _mb_to_gb(status.swap_total_mb) or 0.0
+        val_sty = "dim" if color == "grey50" else color
+        lines.append(_hdr("SWAP", (f"  {used_gb:.1f} / {tot_gb:.1f} GB", val_sty)))
+        lines.extend(_fat_bar(pct, color if color != "grey50" else "white"))
+    else:
+        lines.append(_hdr("SWAP", ("  —", "dim")))
+
+    lines.append(sp)
+
+    # ----- Temp (single line — scalar, not a fill %) -----
+    temp_c = (status.battery_temp_c if status.battery_temp_c is not None
+              else status.cpu_temp_c)
+    if temp_c is not None:
+        color  = _temp_color(temp_c)
+        source = "battery" if status.battery_temp_c is not None else "cpu"
+        lines.append(_hdr("TEMP", (f"  {temp_c:.1f}°C", color), (f"  {source}", "dim")))
+    else:
+        lines.append(_hdr("TEMP", ("  —", "dim")))
+
+    lines.append(sp)
+
+    # ----- Battery -----
+    if status.battery_pct is not None:
+        color = _battery_color(status.battery_pct)
+        status_str = f"  {status.battery_status}" if status.battery_status else ""
+        lines.append(_hdr(
+            "BATTERY",
+            (f"  {status.battery_pct}%", color),
+            (status_str, "dim"),
+        ))
+        lines.extend(_fat_bar(status.battery_pct, color, rows=2))
+    else:
+        lines.append(_hdr("BATTERY", ("  —", "dim")))
+
+    # ----- Freshness footer -----
+    if status.metrics_age_s is not None:
+        lines.append(sp)
+        age = int(status.metrics_age_s)
+        lines.append(Text(
+            f"updated {age}s ago",
+            style="bold red" if stale else "dim",
+        ))
+
+    badges       = _alert_badges(status.alerts)
+    title        = Text()
+    title.append(status.name, style="bold")
+    title.append(f"  {status.tier.upper()}", style="cyan")
+    subtitle     = Text(badges, style="bold red") if badges else None
+    border_style = "red" if badges else ("dim" if stale else "white")
+
+    return Panel(
+        Group(*lines),
+        title=title,
+        subtitle=subtitle,
+        border_style=border_style,
+        title_align="left",
+        subtitle_align="right",
+        width=width,
+        padding=(1, 1),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Top-level render
 # ---------------------------------------------------------------------------
 

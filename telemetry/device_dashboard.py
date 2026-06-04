@@ -25,7 +25,7 @@ from rich.text import Text
 # Reuse all rendering helpers from the fleet dashboard — single source of truth.
 # The lazy import guard in dashboard.py means this works without pyyaml/receiver.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from telemetry.dashboard import _render_panel                              # noqa: E402
+from telemetry.dashboard import _render_device_panel                       # noqa: E402
 from telemetry.models import (                                             # noqa: E402
     DeviceStatus, STALE_AFTER_S, ALERT_TEMP_C, ALERT_MEM_PCT, ALERT_BATTERY_PCT,
 )
@@ -117,7 +117,7 @@ def main() -> None:
     with Live(console=console, refresh_per_second=1, screen=True) as live:
         while True:
             status = _build_status(name, role)
-            live.update(_render_panel(status, width=console.width))
+            live.update(_render_device_panel(status, width=console.width))
             time.sleep(INTERVAL)
 
 
