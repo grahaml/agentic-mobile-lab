@@ -89,6 +89,10 @@ wake_device() {
         sleep 1
         adb -s "$serial" shell input text "/data/data/com.termux/files/home/start-display.sh" </dev/null 2>/dev/null
         adb -s "$serial" shell input keyevent KEYCODE_ENTER </dev/null 2>/dev/null
+        sleep 1.5
+        # Dismiss the soft keyboard — Android intercepts BACK to hide the
+        # keyboard before passing it to the app, so this is safe with tmux.
+        adb -s "$serial" shell input keyevent KEYCODE_BACK </dev/null 2>/dev/null
         echo "OK"
     else
         echo "FAILED (Termux not responding)"
