@@ -89,6 +89,9 @@ def _format_expires_at(expires_at: Optional[str]) -> str:
     remaining = (expires - now).total_seconds()
     if remaining <= 0:
         return "idle"
+    # Ollama uses a far-future sentinel (e.g. year 2318) to mean "keep loaded".
+    if remaining > 3600:
+        return "loaded"
 
     minutes = int(remaining // 60)
     seconds = int(remaining % 60)
@@ -203,7 +206,7 @@ def _model_lines(status: DeviceStatus) -> list[Text]:
     sub = Text("  ")
     if ctx is not None:
         sub.append(f"ctx {ctx} · ", style="dim")
-    sub.append(f"expires in {expires_str}" if expires_str != "idle" else "idle",
+    sub.append(f"expires in {expires_str}" if expires_str not in ("idle", "loaded") else expires_str,
                style="dim")
 
     return [name_line, sub]
@@ -384,7 +387,7 @@ def _render_device_panel(status: DeviceStatus, width: int) -> Panel:
         if ctx:
             sub.append(f"ctx {ctx}  ·  ", style="dim")
         sub.append(
-            f"expires in {expires_str}" if expires_str != "idle" else "idle",
+            f"expires in {expires_str}" if expires_str not in ("idle", "loaded") else expires_str,
             style="dim",
         )
         lines.append(sub)
