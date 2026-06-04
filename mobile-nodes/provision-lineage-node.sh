@@ -131,15 +131,21 @@ run_ssh "mkdir -p ~/.termux/boot && echo -e '#!/data/data/com.termux/files/usr/b
 
 # Write device identity and push display scripts
 echo "🖥️  Deploying rack display..."
-run_ssh "printf 'name=%s\nrole=%s\nmodel=%s\n' '$PERSONA_NAME' '$SERVICE_ROLE' '$MODEL_NAME' > ~/.device-info"
+run_ssh "printf 'name=%s\nrole=%s\nmodel=%s\n' '$SERVICE_ROLE' '$SERVICE_ROLE' '$MODEL_NAME' > ~/.device-info"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ssh -i "$DEVICE_KEY" -p 8022 -o StrictHostKeyChecking=no "$PERSONA_NAME@$PHONE_IP" \
     "cat > ~/status-pane.sh"   < "$SCRIPT_DIR/status-pane.sh"
 ssh -i "$DEVICE_KEY" -p 8022 -o StrictHostKeyChecking=no "$PERSONA_NAME@$PHONE_IP" \
     "cat > ~/start-display.sh" < "$SCRIPT_DIR/start-display.sh"
 run_ssh "chmod +x ~/status-pane.sh ~/start-display.sh"
-# Auto-attach to display session whenever Termux is opened (idempotent)
-run_ssh "printf '[ -f ~/.bashrc ] && source ~/.bashrc\n[ -t 0 ] && [ -z \"\$TMUX\" ] && [ -z \"\$SSH_CONNECTION\" ] && ~/start-display.sh\n' > ~/.bash_profile"
+# SSH PATH fix: LineageOS sshd is restarted via ADB run-as and doesn't inherit the
+# Termux PATH. ~/.bash_profile covers login shells; ~/.ssh/environment covers
+# non-interactive command execution (requires PermitUserEnvironment in sshd_config).
+run_ssh "printf 'export PATH=\"/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/sbin:\$PATH\"\n[ -f ~/.bashrc ] && source ~/.bashrc\n' > ~/.bash_profile"
+run_ssh "grep -q 'PermitUserEnvironment' /data/data/com.termux/files/usr/etc/ssh/sshd_config \
+    || echo 'PermitUserEnvironment yes' >> /data/data/com.termux/files/usr/etc/ssh/sshd_config"
+run_ssh "mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo 'PATH=/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/sbin:/product/bin:/system/bin:/system/xbin' > ~/.ssh/environment"
 
 echo "📁 Mounting filesystems and fixing /tmp for chroot..."
 run_adb_root "mount -t proc proc $UBUNTU_ROOT/proc || true"
@@ -219,6 +225,14 @@ else
     # Fire one immediate push
     run_adb_root "$CHROOT_USER '$AGENT_DIR/metrics_push.sh'"
     echo "📡 Telemetry agent installed in chroot (pushing to $COLLECTOR_URL as '$SERVICE_ROLE')."
+fi
+
+# 13. Python Dashboard
+echo "🖥️  Installing Python dashboard..."
+if bash "$DIR/../telemetry/install-dashboard.sh" --only "$SERVICE_ROLE"; then
+    echo "🖥️  Dashboard installed."
+else
+    echo "⚠️  Dashboard install failed — run: bash telemetry/install-dashboard.sh --only $SERVICE_ROLE"
 fi
 
 echo "✅ Provisioning Complete for $PERSONA_NAME!"

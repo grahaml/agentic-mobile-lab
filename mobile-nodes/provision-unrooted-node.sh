@@ -248,7 +248,7 @@ fi
 echo "🖥️  Deploying rack display..."
 SSH_CMD="ssh -i $DEVICE_KEY -p 8022 -o StrictHostKeyChecking=no $TERMUX_USER@$PHONE_IP"
 $SSH_CMD "pkg install btop htop tmux -y >/dev/null 2>&1 || true"
-$SSH_CMD "printf 'name=%s\nrole=%s\nmodel=%s\n' '$PERSONA_NAME' '$SERVICE_ROLE' 'pending' > ~/.device-info"
+$SSH_CMD "printf 'name=%s\nrole=%s\nmodel=%s\n' '$SERVICE_ROLE' '$SERVICE_ROLE' 'pending' > ~/.device-info"
 $SSH_CMD "cat > ~/status-pane.sh"   < "$DIR/status-pane.sh"
 $SSH_CMD "cat > ~/start-display.sh" < "$DIR/start-display.sh"
 $SSH_CMD "chmod +x ~/status-pane.sh ~/start-display.sh"
@@ -270,6 +270,14 @@ if bash "$DIR/install-telemetry.sh" "$SERVICE_ROLE"; then
     echo "📡 Telemetry agent installed."
 else
     echo "⚠️  Telemetry install failed — run: bash mobile-nodes/install-telemetry.sh $SERVICE_ROLE"
+fi
+
+# --- 7. Dashboard ---
+echo "🖥️  Installing Python dashboard..."
+if bash "$DIR/../telemetry/install-dashboard.sh" --only "$SERVICE_ROLE"; then
+    echo "🖥️  Dashboard installed."
+else
+    echo "⚠️  Dashboard install failed — run: bash telemetry/install-dashboard.sh --only $SERVICE_ROLE"
 fi
 
 echo "✅ Provisioning Complete. Secure handoff verified."

@@ -192,7 +192,7 @@ adb shell "su -c 'mkdir -p $TERMUX_HOME/.termux/boot && \
 
 # 3d. Write device identity config, push display scripts, wire up .bashrc
 echo "🖥️  Deploying rack display..."
-adb shell "su -c 'echo -e \"name=$PERSONA_NAME\nrole=$SERVICE_ROLE\nmodel=$MODEL_NAME\" > $TERMUX_HOME/.device-info && chown $TERMUX_USER:$TERMUX_USER $TERMUX_HOME/.device-info'"
+adb shell "su -c 'echo -e \"name=$SERVICE_ROLE\nrole=$SERVICE_ROLE\nmodel=$MODEL_NAME\" > $TERMUX_HOME/.device-info && chown $TERMUX_USER:$TERMUX_USER $TERMUX_HOME/.device-info'"
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 adb push "$DIR/status-pane.sh"   /data/local/tmp/status-pane.sh
 adb push "$DIR/start-display.sh" /data/local/tmp/start-display.sh
@@ -300,4 +300,19 @@ if ssh -i "$DEVICE_KEY" -p 8022 -o StrictHostKeyChecking=no -o ConnectTimeout=5 
     echo "📶 SSH: VERIFIED (Device-Specific Key)"
 else
     echo "⚠️  SSH: MANUAL CHECK REQUIRED (Try: ssh-add $DEVICE_KEY)"
+fi
+
+# 11. Telemetry Agent + Dashboard
+echo "📡 Installing telemetry push agent..."
+if bash "$DIR/../telemetry/install-fleet.sh" --only "$SERVICE_ROLE"; then
+    echo "📡 Telemetry agent installed."
+else
+    echo "⚠️  Telemetry install failed — run: bash telemetry/install-fleet.sh --only $SERVICE_ROLE"
+fi
+
+echo "🖥️  Installing Python dashboard..."
+if bash "$DIR/../telemetry/install-dashboard.sh" --only "$SERVICE_ROLE"; then
+    echo "🖥️  Dashboard installed."
+else
+    echo "⚠️  Dashboard install failed — run: bash telemetry/install-dashboard.sh --only $SERVICE_ROLE"
 fi
