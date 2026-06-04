@@ -58,6 +58,23 @@ def _bar(used_pct: float, width: int = 10) -> str:
     return "█" * filled + "░" * (width - filled)
 
 
+# Offset from ASCII printable range (0x21–0x7E) to fullwidth range (0xFF01–0xFF5E).
+_FW_OFFSET = ord("！") - ord("!")
+
+
+def _fw(s: str) -> str:
+    """Return s with ASCII printable chars replaced by their fullwidth equivalents.
+
+    Fullwidth chars occupy 2 terminal columns, making labels and numbers visibly
+    larger on high-DPI phone screens without changing font settings.
+    Spaces and non-ASCII chars (°, GB suffixes) are passed through unchanged.
+    """
+    return "".join(
+        chr(ord(c) + _FW_OFFSET) if "!" <= c <= "~" else c
+        for c in s
+    )
+
+
 def _format_expires_at(expires_at: Optional[str]) -> str:
     """Format Ollama's RFC 3339 `expires_at` as `Xm Ys`, or `idle` if past."""
     if not expires_at or not isinstance(expires_at, str):
@@ -386,13 +403,13 @@ def _render_device_panel(status: DeviceStatus, width: int) -> Panel:
         used_gb = _mb_to_gb(status.mem_total_mb - (status.mem_available_mb or 0))
         tot_gb  = _mb_to_gb(status.mem_total_mb)
         lines.append(_hdr(
-            "MEMORY",
-            (f"  {status.mem_used_pct:.0f}%", color),
+            _fw("MEMORY"),
+            (_fw(f"  {status.mem_used_pct:.0f}%"), color),
             (f"  {used_gb:.1f} / {tot_gb:.1f} GB", "dim"),
         ))
         lines.extend(_fat_bar(status.mem_used_pct, color))
     else:
-        lines.append(_hdr("MEMORY", ("  —", "dim")))
+        lines.append(_hdr(_fw("MEMORY"), ("  —", "dim")))
 
     lines.append(sp)
 
@@ -403,10 +420,13 @@ def _render_device_panel(status: DeviceStatus, width: int) -> Panel:
         used_gb = _mb_to_gb(status.swap_used_mb) or 0.0
         tot_gb  = _mb_to_gb(status.swap_total_mb) or 0.0
         val_sty = "dim" if color == "grey50" else color
-        lines.append(_hdr("SWAP", (f"  {used_gb:.1f} / {tot_gb:.1f} GB", val_sty)))
+        lines.append(_hdr(
+            _fw("SWAP"),
+            (f"  {used_gb:.1f} / {tot_gb:.1f} GB", val_sty),
+        ))
         lines.extend(_fat_bar(pct, color if color != "grey50" else "white"))
     else:
-        lines.append(_hdr("SWAP", ("  —", "dim")))
+        lines.append(_hdr(_fw("SWAP"), ("  —", "dim")))
 
     lines.append(sp)
 
@@ -416,9 +436,13 @@ def _render_device_panel(status: DeviceStatus, width: int) -> Panel:
     if temp_c is not None:
         color  = _temp_color(temp_c)
         source = "battery" if status.battery_temp_c is not None else "cpu"
-        lines.append(_hdr("TEMP", (f"  {temp_c:.1f}°C", color), (f"  {source}", "dim")))
+        lines.append(_hdr(
+            _fw("TEMP"),
+            (_fw(f"  {temp_c:.1f}") + "°C", color),
+            (f"  {source}", "dim"),
+        ))
     else:
-        lines.append(_hdr("TEMP", ("  —", "dim")))
+        lines.append(_hdr(_fw("TEMP"), ("  —", "dim")))
 
     lines.append(sp)
 
@@ -427,13 +451,13 @@ def _render_device_panel(status: DeviceStatus, width: int) -> Panel:
         color = _battery_color(status.battery_pct)
         status_str = f"  {status.battery_status}" if status.battery_status else ""
         lines.append(_hdr(
-            "BATTERY",
-            (f"  {status.battery_pct}%", color),
+            _fw("BATTERY"),
+            (_fw(f"  {status.battery_pct}%"), color),
             (status_str, "dim"),
         ))
         lines.extend(_fat_bar(status.battery_pct, color, rows=2))
     else:
-        lines.append(_hdr("BATTERY", ("  —", "dim")))
+        lines.append(_hdr(_fw("BATTERY"), ("  —", "dim")))
 
     # ----- Freshness footer -----
     if status.metrics_age_s is not None:
