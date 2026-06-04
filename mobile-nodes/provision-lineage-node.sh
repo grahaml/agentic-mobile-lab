@@ -96,7 +96,7 @@ $ADB_BIN -s "$PHONE_IP" shell settings put global wifi_sleep_policy 2 >/dev/null
 $ADB_BIN -s "$PHONE_IP" shell dumpsys deviceidle whitelist +com.termux >/dev/null 2>&1 || true
 
 echo "📦 Configuring Termux environment..."
-run_ssh "pkg update && pkg install openssh -y >/dev/null 2>&1"
+run_ssh "pkg update && pkg install openssh btop htop tmux -y >/dev/null 2>&1"
 run_ssh "termux-wake-lock || true"
 
 # --- 8b. Services & Persistence ---
@@ -127,7 +127,19 @@ SERVICES_EOF
 chmod +x ~/start-services.sh"
 
 # Configure Termux:Boot
-run_ssh "mkdir -p ~/.termux/boot && echo -e '#!/data/data/com.termux/files/usr/bin/bash\ntermux-wake-lock\nsshd\n~/start-services.sh' > ~/.termux/boot/start-agent && chmod +x ~/.termux/boot/start-agent"
+run_ssh "mkdir -p ~/.termux/boot && echo -e '#!/data/data/com.termux/files/usr/bin/bash\ntermux-wake-lock\nsshd\n~/start-services.sh\n~/start-display.sh' > ~/.termux/boot/start-agent && chmod +x ~/.termux/boot/start-agent"
+
+# Write device identity and push display scripts
+echo "🖥️  Deploying rack display..."
+run_ssh "printf 'name=%s\nrole=%s\nmodel=%s\n' '$PERSONA_NAME' '$SERVICE_ROLE' '$MODEL_NAME' > ~/.device-info"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ssh -i "$DEVICE_KEY" -p 8022 -o StrictHostKeyChecking=no "$PERSONA_NAME@$PHONE_IP" \
+    "cat > ~/status-pane.sh"   < "$SCRIPT_DIR/status-pane.sh"
+ssh -i "$DEVICE_KEY" -p 8022 -o StrictHostKeyChecking=no "$PERSONA_NAME@$PHONE_IP" \
+    "cat > ~/start-display.sh" < "$SCRIPT_DIR/start-display.sh"
+run_ssh "chmod +x ~/status-pane.sh ~/start-display.sh"
+# Auto-attach to display session whenever Termux is opened (idempotent)
+run_ssh "printf '[ -f ~/.bashrc ] && source ~/.bashrc\n[ -t 0 ] && [ -z \"\$TMUX\" ] && [ -z \"\$SSH_CONNECTION\" ] && ~/start-display.sh\n' > ~/.bash_profile"
 
 echo "📁 Mounting filesystems and fixing /tmp for chroot..."
 run_adb_root "mount -t proc proc $UBUNTU_ROOT/proc || true"

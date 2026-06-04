@@ -244,6 +244,19 @@ else
     echo "⚠️  No model found on device yet — run set-mobile-model.sh after provisioning."
 fi
 
+# --- 4c. Rack display setup ---
+echo "🖥️  Deploying rack display..."
+SSH_CMD="ssh -i $DEVICE_KEY -p 8022 -o StrictHostKeyChecking=no $TERMUX_USER@$PHONE_IP"
+$SSH_CMD "pkg install btop htop tmux -y >/dev/null 2>&1 || true"
+$SSH_CMD "printf 'name=%s\nrole=%s\nmodel=%s\n' '$PERSONA_NAME' '$SERVICE_ROLE' 'pending' > ~/.device-info"
+$SSH_CMD "cat > ~/status-pane.sh"   < "$DIR/status-pane.sh"
+$SSH_CMD "cat > ~/start-display.sh" < "$DIR/start-display.sh"
+$SSH_CMD "chmod +x ~/status-pane.sh ~/start-display.sh"
+# Patch boot script to include display (idempotent — only add if not already present)
+$SSH_CMD "grep -qF 'start-display' ~/.termux/boot/start-agent 2>/dev/null || echo '~/start-display.sh' >> ~/.termux/boot/start-agent"
+# Auto-attach to display session whenever Termux is opened (idempotent)
+$SSH_CMD "printf '[ -f ~/.bashrc ] && source ~/.bashrc\n[ -t 0 ] && [ -z \"\$TMUX\" ] && [ -z \"\$SSH_CONNECTION\" ] && ~/start-display.sh\n' > ~/.bash_profile"
+
 # --- 5. Cluster Registration ---
 echo "🔗 Registering in k3s cluster..."
 "$DIR/bridge-phone.sh" "$PHONE_IP" "$SERVICE_ROLE" "$DEVICE_ID"

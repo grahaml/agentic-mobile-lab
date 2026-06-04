@@ -159,6 +159,7 @@ fi
 # 3b. Configure Termux Wake Lock & Services
 echo "🔧 Configuring Termux wake lock & services..."
 adb shell "su $TERMUX_USER -g 3003 -c 'PATH=/data/data/com.termux/files/usr/bin:\$PATH /data/data/com.termux/files/usr/bin/pkg install root-repo -y > /dev/null 2>&1 || true'"
+adb shell "su $TERMUX_USER -g 3003 -c 'PATH=/data/data/com.termux/files/usr/bin:\$PATH /data/data/com.termux/files/usr/bin/pkg install btop htop tmux -y > /dev/null 2>&1 || true'"
 adb shell "su $TERMUX_USER -g 3003 -c 'PATH=/data/data/com.termux/files/usr/bin:\$PATH /data/data/com.termux/files/usr/bin/termux-wake-lock || true'"
 
 # Generate services script on host and push it (starts sshd + mounts chroot + starts ollama, no dashboard)
@@ -185,9 +186,22 @@ adb shell "su -c 'mv /data/local/tmp/start-services.sh $TERMUX_HOME/start-servic
 # 3c. Configure Termux:Boot script
 echo "🚀 Configuring Termux:Boot startup script..."
 adb shell "su -c 'mkdir -p $TERMUX_HOME/.termux/boot && \
-                 echo -e \"#!/data/data/com.termux/files/usr/bin/bash\ntermux-wake-lock\nsshd\n~/start-services.sh\" > $TERMUX_HOME/.termux/boot/start-agent && \
+                 echo -e \"#!/data/data/com.termux/files/usr/bin/bash\ntermux-wake-lock\nsshd\n~/start-services.sh\n~/start-display.sh\" > $TERMUX_HOME/.termux/boot/start-agent && \
                  chown -R $TERMUX_USER:$TERMUX_USER $TERMUX_HOME/.termux && \
                  chmod +x $TERMUX_HOME/.termux/boot/start-agent'"
+
+# 3d. Write device identity config, push display scripts, wire up .bashrc
+echo "🖥️  Deploying rack display..."
+adb shell "su -c 'echo -e \"name=$PERSONA_NAME\nrole=$SERVICE_ROLE\nmodel=$MODEL_NAME\" > $TERMUX_HOME/.device-info && chown $TERMUX_USER:$TERMUX_USER $TERMUX_HOME/.device-info'"
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+adb push "$DIR/status-pane.sh"   /data/local/tmp/status-pane.sh
+adb push "$DIR/start-display.sh" /data/local/tmp/start-display.sh
+adb shell "su -c 'mv /data/local/tmp/status-pane.sh $TERMUX_HOME/status-pane.sh && \
+                  mv /data/local/tmp/start-display.sh $TERMUX_HOME/start-display.sh && \
+                  chown $TERMUX_USER:$TERMUX_USER $TERMUX_HOME/status-pane.sh $TERMUX_HOME/start-display.sh && \
+                  chmod +x $TERMUX_HOME/status-pane.sh $TERMUX_HOME/start-display.sh'"
+# Auto-attach to display session whenever Termux is opened (idempotent)
+adb shell "su -c 'printf \"[ -f ~/.bashrc ] && source ~/.bashrc\n[ -t 0 ] && [ -z \\\"\\\$TMUX\\\" ] && [ -z \\\"\\\$SSH_CONNECTION\\\" ] && ~/start-display.sh\n\" > $TERMUX_HOME/.bash_profile && chown $TERMUX_USER:$TERMUX_USER $TERMUX_HOME/.bash_profile'"
 
 # 4. Prepare Ubuntu Chroot Environment (Idempotent Ollama binary check)
 echo "🧪 Checking Ubuntu Chroot dependencies..."
