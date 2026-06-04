@@ -67,11 +67,12 @@ PYEOF
         "run-as com.termux /data/data/com.termux/files/usr/bin/sshd 2>/dev/null || true"
     sleep 3
 
-    # 4. Restart display dashboard over SSH
-    echo -n "  restarting dashboard ... "
+    # 4. Restart crond + display dashboard over SSH
+    echo -n "  restarting crond + dashboard ... "
     timeout 15 ssh -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=2 \
         "$host" "
         export PATH=/data/data/com.termux/files/usr/bin:\$PATH
+        pgrep crond >/dev/null || crond
         tmux kill-session -t display 2>/dev/null
         bash ~/start-display.sh &>/dev/null &
     " && echo "ok" || echo "FAILED (may need wake-fleet-displays.sh)"
