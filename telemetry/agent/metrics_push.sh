@@ -163,6 +163,10 @@ PAYLOAD=$(jq -n \
     ollama_ps: $ollama_ps,
     ollama_tags: $ollama_tags}')
 
+# --- Cache locally for on-device status pane --------------------------------
+printf '%s\n' "$PAYLOAD" > "$HOME/.last_metrics.json.tmp" \
+    && mv "$HOME/.last_metrics.json.tmp" "$HOME/.last_metrics.json"
+
 # --- POST. Always exit 0 — cron handles cadence. ---------------------------
 curl -s --max-time 5 -X POST "$COLLECTOR" \
     -H "Content-Type: application/json" \

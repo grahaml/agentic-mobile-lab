@@ -33,8 +33,16 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
-from telemetry import collector, receiver
-from telemetry.collector import DeviceStatus
+# collector and receiver are only needed in fleet mode (not --local).
+# Import them lazily so device_dashboard.py can import rendering helpers
+# from this module without pulling in pyyaml or the HTTP receiver.
+try:
+    from telemetry import collector, receiver
+    from telemetry.collector import DeviceStatus
+except ImportError:
+    collector = None  # type: ignore[assignment]
+    receiver = None   # type: ignore[assignment]
+    from telemetry.models import DeviceStatus  # type: ignore[no-redef]
 
 
 # ---------------------------------------------------------------------------
