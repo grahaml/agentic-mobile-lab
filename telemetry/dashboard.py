@@ -355,7 +355,7 @@ def _render_device_panel(status: DeviceStatus, width: int) -> Panel:
             t.append(val, style="dim" if stale else sty)
         return t
 
-    def _fat_bar(pct: float, color: str, rows: int = 3) -> list[Text]:
+    def _fat_bar(pct: float, color: str, rows: int = 2) -> list[Text]:
         s = ("dim " if stale else "") + color
         return [Text(_bar(pct, bar_w), style=s) for _ in range(rows)]
 
@@ -455,7 +455,7 @@ def _render_device_panel(status: DeviceStatus, width: int) -> Panel:
             (_fw(f"  {status.battery_pct}%"), color),
             (status_str, "dim"),
         ))
-        lines.extend(_fat_bar(status.battery_pct, color, rows=2))
+        lines.extend(_fat_bar(status.battery_pct, color))
     else:
         lines.append(_hdr(_fw("BATTERY"), ("  —", "dim")))
 
