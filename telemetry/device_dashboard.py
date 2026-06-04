@@ -117,7 +117,7 @@ def main() -> None:
     with Live(console=console, refresh_per_second=1, screen=True) as live:
         while True:
             status = _build_status(name, role)
-            live.update(_render_panel(status))
+            live.update(_render_panel(status, width=console.width))
             time.sleep(INTERVAL)
 
 

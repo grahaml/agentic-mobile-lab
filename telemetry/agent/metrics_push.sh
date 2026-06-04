@@ -9,6 +9,9 @@
 # The two placeholder lines below are patched by install.sh — leave the
 # __COLLECTOR_URL__ and __DEVICE_NAME__ markers intact so sed can find them.
 
+# Ensure Termux binaries (jq, curl, awk, etc.) are reachable in cron/SSH sessions.
+export PATH=/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/sbin:$PATH
+
 COLLECTOR="__COLLECTOR_URL__"   # patched by install.sh
 DEVICE_NAME="__DEVICE_NAME__"   # patched by install.sh
 
@@ -50,12 +53,10 @@ fi
 # --- Memory (/proc/meminfo, kB -> MB) --------------------------------------
 MEM_TOTAL="null"
 MEM_AVAIL="null"
-if [ -r /proc/meminfo ]; then
-    MEM_TOTAL_KB=$(awk '/^MemTotal:/ {print $2; exit}' /proc/meminfo 2>/dev/null)
-    MEM_AVAIL_KB=$(awk '/^MemAvailable:/ {print $2; exit}' /proc/meminfo 2>/dev/null)
-    [ -n "$MEM_TOTAL_KB" ] && MEM_TOTAL=$(( MEM_TOTAL_KB / 1024 ))
-    [ -n "$MEM_AVAIL_KB" ] && MEM_AVAIL=$(( MEM_AVAIL_KB / 1024 ))
-fi
+MEM_TOTAL_KB=$(awk '/^MemTotal:/    {print $2; exit}' /proc/meminfo 2>/dev/null)
+MEM_AVAIL_KB=$(awk '/^MemAvailable:/{print $2; exit}' /proc/meminfo 2>/dev/null)
+[ -n "$MEM_TOTAL_KB" ] && MEM_TOTAL=$(( MEM_TOTAL_KB / 1024 ))
+[ -n "$MEM_AVAIL_KB" ] && MEM_AVAIL=$(( MEM_AVAIL_KB / 1024 ))
 
 # --- Swap (/proc/swaps → su fallback → free -m fallback) -------------------
 # /proc/swaps is root-gated on many OEMs. Fall back to `free -m` which reports
@@ -75,8 +76,9 @@ elif command -v su >/dev/null 2>&1; then
     if [ -n "$SWAP_LINE" ]; then
         SWAP_TOTAL_KB=$(printf '%s' "$SWAP_LINE" | awk '{print $1}')
         SWAP_USED_KB=$(printf '%s' "$SWAP_LINE" | awk '{print $2}')
-        [ -n "$SWAP_TOTAL_KB" ] && SWAP_TOTAL=$(( SWAP_TOTAL_KB / 1024 ))
-        [ -n "$SWAP_USED_KB" ] && SWAP_USED=$(( SWAP_USED_KB / 1024 ))
+        # Validate numeric — stub su on unrooted Samsung outputs an error message
+        case "$SWAP_TOTAL_KB" in [0-9]*) SWAP_TOTAL=$(( SWAP_TOTAL_KB / 1024 )) ;; esac
+        case "$SWAP_USED_KB"  in [0-9]*) SWAP_USED=$(( SWAP_USED_KB  / 1024 )) ;; esac
     fi
 fi
 

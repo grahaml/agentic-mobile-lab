@@ -192,8 +192,16 @@ def _model_lines(status: DeviceStatus) -> list[Text]:
     return [name_line, sub]
 
 
-def _render_panel(status: DeviceStatus) -> Panel:
+def _render_panel(status: DeviceStatus, width: int = 48) -> Panel:
     stale = status.metrics_stale
+
+    # Extra vertical breathing room for wide (phone full-screen) panels.
+    padding = (1, 2) if width >= 60 else (0, 1)
+    # Inner content width: border (1 each side) + actual left/right padding.
+    inner_w = width - 2 - padding[1] * 2
+    # Scale bar to fill available space; cap at 40 so wide terminals stay sane.
+    # Labels are 5 chars ("Mem  "), stats suffix ≈ 18 chars (" 80%  6.4 / 8.0 GB").
+    bar_width = min(40, max(10, inner_w - 23))
 
     # ----- Title -----
     title = Text()
@@ -225,7 +233,7 @@ def _render_panel(status: DeviceStatus) -> Panel:
     # ----- Memory -----
     if status.mem_used_pct is not None and status.mem_total_mb is not None:
         color = _mem_color(status.mem_used_pct)
-        bar = _bar(status.mem_used_pct)
+        bar = _bar(status.mem_used_pct, bar_width)
         used_gb = _mb_to_gb(status.mem_total_mb - (status.mem_available_mb or 0))
         total_gb = _mb_to_gb(status.mem_total_mb)
         mem_val = Text()
@@ -247,7 +255,7 @@ def _render_panel(status: DeviceStatus) -> Panel:
             if status.swap_total_mb > 0
             else 0
         )
-        bar = _bar(pct)
+        bar = _bar(pct, bar_width)
         used_gb = _mb_to_gb(status.swap_used_mb) or 0.0
         total_gb = _mb_to_gb(status.swap_total_mb) or 0.0
         swap_val = Text()
@@ -300,8 +308,8 @@ def _render_panel(status: DeviceStatus) -> Panel:
         border_style=border_style,
         title_align="left",
         subtitle_align="right",
-        width=48,
-        padding=(0, 1),
+        width=width,
+        padding=padding,
     )
 
 
